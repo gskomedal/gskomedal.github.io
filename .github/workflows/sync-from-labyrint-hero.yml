@@ -2,6 +2,11 @@ name: Sync from Labyrint-Hero
 
 on:
   workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to sync from Labyrint-Hero'
+        default: 'main'
+        required: true
 
 jobs:
   sync:
@@ -19,6 +24,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: gskomedal/Labyrint-Hero
+          ref: ${{ github.event.inputs.branch }}
           path: game
 
       - name: Copy game files
@@ -47,6 +53,6 @@ jobs:
             echo "No changes to deploy."
           else
             COMMIT=$(git -C ../game rev-parse --short HEAD)
-            git commit -m "Deploy from Labyrint-Hero@${COMMIT}"
+            git commit -m "Deploy from Labyrint-Hero@${COMMIT} (branch: ${{ github.event.inputs.branch }})"
             git push
           fi
