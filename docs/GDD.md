@@ -1,6 +1,6 @@
 # Labyrint Hero – Game Design Document
-**Versjon:** 0.26
-**Sist oppdatert:** 2026-04-04
+**Versjon:** 0.28
+**Sist oppdatert:** 2026-04-06
 
 ---
 
@@ -129,7 +129,7 @@ Helten kan finne et mystisk egg i labyrinten. Egget klekkes til et tilfeldig kj�
 - **AI:** Følger helten (beveger seg ett steg mot helten per monster-tick). Angriper monster som er innen 1 rute.
 - **Kamp:** Kjæledyret gjør automatisk skade mot nærliggende monstre. Monstre har 25% sjanse for å angripe kjæledyret i stedet for helten.
 - **Død:** Kjæledyret kan dø. Nye egg kan spawne i neste level (35% sjanse).
-- **Healing:** Med Dyrevokter T2-evnen «Dyrisk livskraft» healer livspotion også kjæledyret.
+- **Healing:** Med Villmarksjeger T2-evnen «Vitalt anslag» healer alle helende gjenstander (potions, salver, eliksirer) også kjæledyret.
 - **Kjæledyr-ryggsekk:** Kjæledyret har 4 ryggsekk-plasser. Gjenstander overflyter automatisk til kjæledyrets ryggsekk ved full helte-ryggsekk. Gjenstander kan flyttes mellom helt og kjæledyr i inventory.
 - **Persistens:** Lagres med hero-stats mellom verdener og sessions.
 
@@ -148,6 +148,7 @@ Heltens grunnstats gjør at verden 1 er farlig uten noe utstyr. Utstyr og evner 
 | R / Bueknapp (touch) | Skyt pil (krever bue utstyrt) |
 | Q / USE-knapp (touch) | Bruk første consumable i ryggsekken (bombe, drikk, etc.) |
 | E / Inventarknapp (touch) | Åpne/lukk inventory |
+| T | Vis ferdighetstre (kun visning) |
 | ESC | Lukk overlay |
 | +/- eller muskjul | Zoom inn/ut |
 | M / Minikartknapp (touch) | Vis/skjul minikart |
@@ -175,12 +176,28 @@ Bevegelse inn i monster-rute: helten setter facing uten å angripe (visuell flas
 ### Statuseffekter (v0.14)
 | Effekt | Ikon | Varighet | Skade | Kilde | Kur |
 |--------|------|----------|-------|-------|-----|
-| Gift | ☠ | 4 runder | 1/runde | Orc (20%), Troll (30%) | Motgift |
-| Brann | 🔥 | 3 runder | 2/runde | Vulkandungeon-monstre (20%) | Brannsalve, Motgift |
+| Gift | ☠ | 4 runder | 1/2.5s | Orc (20%), Troll (30%) | Motgift, Krystallresistans |
+| Brann | 🔥 | 3 runder | 2/2.0s | Vulkandungeon-monstre (20%) | Brannsalve, Motgift, Krystallresistans |
 | Frostbitt | ❄ | 4 runder | Ingen (halv fart) | Iskrystall-monstre (25%) | Frostsalve, Motgift |
 | Lammet | ⚡ | 1 runde | Ingen (skip turn) | Boss fase 2 (15%) | Venter ut |
 
 Motgift kurerer alle statuseffekter. Effektene stables ikke – ny påføring forlenger gjenværende varighet.
+
+### Krystall-passive bonuser (v0.27)
+Krystaller (edelstener) i ryggsekken gir passive bonuser uten å bruke dem:
+| Krystall | Bonus |
+|----------|-------|
+| Klar kvarts | +1 Synsfelt |
+| Ametyst | 15% Giftresistans |
+| Citrin | +20% Gullfunn |
+| Smaragd | 30% Giftresistans |
+| Akvamarin | 30% Brannresistans |
+| Rubin | +1 Angrep |
+| Safir | +1 Forsvar |
+| Diamant | +1 Angrep, +1 Forsvar, +1 Maks-hjerte |
+| Rød beryll | +10% Kritisk, +10% Unnvikelse |
+
+Bonuser stabler med antall krystaller i ryggsekken.
 
 ### Bump-mekanikk
 Bevegelse inn i monster-rute: helten setter facing uten å angripe (visuell flash). Trykk SPACE/F for å angripe i facing-retning.
@@ -253,28 +270,48 @@ Livspotte, Stor livspotte, Styrkebrygg (midlertidig +2 ATK i 60 sek), Forsvarsbr
 
 ## 7. Evner (Skills)
 
-12 evner, kan stables 3× per evne; velges ved nivå-opp (1 av 3 tilfeldige):
+5 spesialiseringsstier med 3 nivåer (tiers) hver. 2 kjernestier alltid tilgjengelige, 3 håndverksbaserte stier låses opp gjennom spilling. Velges ved nivå-opp.
 
-| Evne | Effekt |
-|------|--------|
-| power_strike | +1 ATK |
-| thick_skin | +1 DEF |
-| iron_health | +1 max hjerte |
-| keen_eye | +1 synsradius |
-| precision | +8% kritsjanse |
-| bulwark | +2 DEF |
-| dodge | +12% unnvikelse |
-| xp_boost | +25% XP |
-| vital_strike | +2 ATK |
-| regen | Regenerer 1 hjerte hvert 20. trekk |
-| battle_hardened | +1 ATK, +1 DEF |
-| giant_strength | +3 ATK |
+### Kjernestier
+
+**Kriger** (kamp, forsvar og utholdenhet):
+| Tier | Evne | Effekt | Maks |
+|------|------|--------|------|
+| T1 | power_strike | +2 ATK, +1 DEF | ×3 |
+| T2 | battle_hardened | +2 ATK, +1 DEF, +1 Hjerte, +2 ryggsekk | ×2 |
+| T3 | giant_strength | +5 ATK, +2 maks hjerter | ×1 |
+
+**Villmarksjeger** (syn, presisjon, unnvikelse og kjæledyr):
+| Tier | Evne | Effekt | Maks |
+|------|------|--------|------|
+| T1 | keen_eye | +2 syn, +20% XP, +2 kjæl.-ATK | ×2 |
+| T2 | vital_strike | +20% krit, +15% unnvikelse, +3 kjæl.-HP, +1 kjæl.-DEF, potion healer kjæledyr | ×2 |
+| T3 | precision | +3 ATK, +3 kjæl.-ATK, +3 kjæl.-HP, +2 hjerter nå | ×1 |
+
+### Håndverksstier (låses opp)
+- **Geolog** (lås: finn mineral) – mineralsynsradius, utbytte, garantert sjeldent mineral
+- **Metallurg** (lås: smelt mineral) – smeltetid, legeringsstats, mestersmie
+- **Kjemiker** (lås: lag kjemikalie) – potion-varighet, bombeskade, eksplosjonsradius
+
+### Synergier
+Aktiveres automatisk når helten har evner fra begge stier i et par:
+| Synergi | Stier | Effekt |
+|---------|-------|--------|
+| Motangrep | Kriger + Villmarksjeger | 20% motangrep |
+| Tornehud | Kriger + Villmarksjeger | 1 tornskade, +1 syn |
+| Jordens kraft | Geolog + Kriger | +1 DEF, +1 mineral-syn |
+| Smiekunst | Metallurg + Kriger | +3 ATK, +20% malmeffekt |
+| Malmkjenne | Metallurg + Geolog | +1 mineral-syn, -10% smeltetid |
+| Giftklinger | Kjemiker + Kriger | +2 ATK, 15% gift |
+| Alkymist | Kjemiker + Metallurg | +20% potens, -15% energi |
+| Naturkjenner | Geolog + Villmarksjeger | +1 mineral-syn, +2 kjæl.-HP |
+| Giftjeger | Kjemiker + Villmarksjeger | +20% kjemibombe, +10% krit |
 
 ---
 
 ## 8. Lyd
 
-- **Bakgrunnsmusikk:** 5 prosedyre-temaer (Web Audio API), skifter med verden
+- **Bakgrunnsmusikk:** 8 prosedyre-temaer (Web Audio API) inspirert av Edvard Grieg, med melodi, bass, akkorder og kontramellodi. Skifter med verden/sone
 - **SFX:** angrep, pilskudd, skade, plukk opp, nivå-opp, død, døroppning, veggskjøting, exit-portal
 - **Innstillinger:** ⚙-knapp i HUD åpner SettingsScene med volum-slidere og on/off-toggle
 
@@ -328,7 +365,7 @@ Livspotte, Stor livspotte, Styrkebrygg (midlertidig +2 ATK i 60 sek), Forsvarsbr
 | Skattekiste-system | ✅ Ferdig | 2–3 per verden |
 | Monster-drop system | ✅ Ferdig | 45% per drap, boss-garantert |
 | Nøkkel/hakke-mekanikk | ✅ Ferdig | |
-| Skilltre (4 veier + synergier) | ✅ Ferdig | Krigar / Vokter / Jeger / Skurk + 4 kryss-vei-synergier |
+| Skilltre (5 stier + synergier) | ✅ Ferdig | Kriger / Villmarksjeger + Geolog / Metallurg / Kjemiker + 9 synergier. T-tast for visning |
 | Unike gjenstandsikoner | ✅ Ferdig | 20+ distinkte prosedyregrafikker |
 | Bevegelsesanimasjon (glide) | ✅ Ferdig | 90ms hero, 126ms monster |
 | Zoom (kamera) | ✅ Ferdig | Muskjul og +/− |
@@ -336,7 +373,7 @@ Livspotte, Stor livspotte, Styrkebrygg (midlertidig +2 ATK i 60 sek), Forsvarsbr
 | Minimap (M-tast) | ✅ Ferdig | Fog-bevisst, hjørne-kart |
 | Statuseffekter (4 typer) | ✅ Ferdig | Gift, Brann, Frostbitt, Lammet |
 | Feller/traps | ✅ Ferdig | Usynlige spikefeller, 1-gangs-trigger |
-| Bakgrunnsmusikk (5 temaer) | ✅ Ferdig | Web Audio API |
+| Bakgrunnsmusikk (8 temaer) | ✅ Ferdig | Web Audio API, Grieg-inspirert med kontramellodi |
 | SFX (9 typer) | ✅ Ferdig | |
 | Lydinnstillinger | ✅ Ferdig | SettingsScene |
 | SaveManager (localStorage) | ✅ Ferdig | |

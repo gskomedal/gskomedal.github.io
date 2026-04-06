@@ -459,14 +459,11 @@ class MapRenderer {
                     g.fillStyle(0xffffff, 0.15);
                     g.fillCircle(px + (seed >> 3 & 11) + 6, py + (seed2 >> 3 & 11) + 6, 1);
                 } else if (room.type === 'chem_lab') {
-                    // Green chemical glow
                     g.fillStyle(0x33dd88, 0.10);
                     g.fillCircle(px + S / 2, py + S / 2, S / 2.5);
-                    // Flask hint
                     g.fillStyle(0x33dd88, 0.25);
                     g.fillRoundedRect(px + (seed & 5) + 6, py + (seed2 & 5) + 8, 4, 8, 1);
                     g.fillRect(px + (seed & 5) + 5, py + (seed2 & 5) + 6, 6, 3);
-                    // Bubbles
                     g.fillStyle(0x66ffaa, 0.2);
                     g.fillCircle(px + (seed >> 2 & 7) + 14, py + (seed2 >> 2 & 5) + 6, 1);
                     g.fillCircle(px + (seed >> 3 & 5) + 10, py + (seed2 >> 3 & 5) + 4, 1);
@@ -543,7 +540,8 @@ class MapRenderer {
 
     updateFog() {
         const scene = this.scene;
-        const r  = scene.hero.visionRadius;
+        const crystalVision = scene.hero.getCrystalBonuses ? scene.hero.getCrystalBonuses().visionRadius : 0;
+        const r  = scene.hero.visionRadius + crystalVision;
         const hx = scene.hero.gridX, hy = scene.hero.gridY;
         for (let y = 0; y < scene.tileH; y++)
             for (let x = 0; x < scene.tileW; x++)

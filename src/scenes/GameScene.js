@@ -181,7 +181,15 @@ class GameScene extends Phaser.Scene {
             const touchChem = this.game.registry.get('touch_chemlab');
             if (touchChem) this.game.registry.set('touch_chemlab', false);
             if ((Phaser.Input.Keyboard.JustDown(this.chemLabKey) || touchChem) && !this.scene.isActive('ChemLabScene') && this._isInChemLab()) {
-                this.scene.launch('ChemLabScene', { heroRef: this.hero, gameScene: this });
+                if (this.hero.chemLabUnlocked) {
+                    this.scene.launch('ChemLabScene', { heroRef: this.hero, gameScene: this });
+                } else {
+                    this._showMessage('Beseir en soneboss for å låse opp laboratoriet!', '#33dd88');
+                }
+            }
+
+            if (Phaser.Input.Keyboard.JustDown(this.skillTreeKey) && !this.scene.isActive('SkillScene')) {
+                this.scene.launch('SkillScene', { heroRef: this.hero, viewOnly: true });
             }
 
             // Auto-open prompts for special rooms
@@ -226,7 +234,11 @@ class GameScene extends Phaser.Scene {
     _checkChemLab() {
         if (!this._chemLabShown && this._isInChemLab()) {
             this._chemLabShown = true;
-            this._showMessage('Kjemisk lab! Trykk C for å lage kjemikalier.', '#33dd88');
+            if (this.hero.chemLabUnlocked) {
+                this._showMessage('Kjemisk lab! Trykk C for å lage kjemikalier.', '#33dd88');
+            } else {
+                this._showMessage('Kjemisk lab funnet! Beseir en soneboss for å aktivere.', '#556644');
+            }
         } else if (!this._isInChemLab()) {
             this._chemLabShown = false;
         }

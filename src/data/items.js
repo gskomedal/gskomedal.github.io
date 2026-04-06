@@ -171,18 +171,20 @@ const ITEM_DEFS = {
     antidote: {
         id: 'antidote', name: 'Motgift', type: 'consumable',
         color: 0x88ee44, desc: 'Kurerer alle statuseffekter og gjenoppretter 1 hjerte', tier: 1,
-        use(hero) {
+        use(hero, scene) {
             hero.clearAllEffects();
             hero.hearts = Math.min(hero.hearts + 1, hero.maxHearts);
+            if (hero.petHealShare && scene && scene.pet && scene.pet.alive) scene.pet.heal(1);
             return true;
         }
     },
     frost_salve: {
         id: 'frost_salve', name: 'Frostsalve', type: 'consumable',
         color: 0x88ddff, desc: 'Kurerer frostbitt og gir motstand mot kulde', tier: 2,
-        use(hero) {
+        use(hero, scene) {
             hero.slowTurns = 0;
             hero.hearts = Math.min(hero.hearts + 1, hero.maxHearts);
+            if (hero.petHealShare && scene && scene.pet && scene.pet.alive) scene.pet.heal(1);
             hero._drawSprite();
             return true;
         }
@@ -190,37 +192,46 @@ const ITEM_DEFS = {
     burn_salve: {
         id: 'burn_salve', name: 'Brannsalve', type: 'consumable',
         color: 0xff8844, desc: 'Kurerer brannsår og gjenoppretter 2 hjerter', tier: 2,
-        use(hero) {
+        use(hero, scene) {
             hero.burnTurns = 0;
             hero.hearts = Math.min(hero.hearts + 2, hero.maxHearts);
+            if (hero.petHealShare && scene && scene.pet && scene.pet.alive) scene.pet.heal(2);
             hero._drawSprite();
             return true;
         }
     },
     bomb: {
         id: 'bomb', name: 'Bombe', type: 'consumable',
-        color: 0x333333, desc: 'Skader alle monstre innen 3 ruter (6 skade)', tier: 2,
+        color: 0x333333, desc: 'Skader alle monstre innen 3 ruter (6 skade). Tilordne til Q.', tier: 2,
         use(hero, scene) {
             if (!scene) return false;
+            let hits = 0;
             for (const m of scene.monsters) {
                 if (!m.alive) continue;
                 const d = Math.abs(m.gridX - hero.gridX) + Math.abs(m.gridY - hero.gridY);
-                if (d <= 3) m.takeDamage(6);
+                if (d <= 3) { m.takeDamage(6); hits++; }
             }
             scene.monsters = scene.monsters.filter(m => m.alive);
+            // Visual explosion effect
+            scene.cameras.main.shake(200, 0.015);
+            scene._floatingText(hero.gridX, hero.gridY, `💥 Bombe! ${hits} treff`, '#ff4400');
             return true;
         }
     },
     flashbang: {
         id: 'flashbang', name: 'Blendgranate', type: 'consumable',
-        color: 0xffffcc, desc: 'Halvér angrepet til monstre innen 4 ruter', tier: 2,
+        color: 0xffffcc, desc: 'Halvér angrepet til monstre innen 4 ruter. Tilordne til Q.', tier: 2,
         use(hero, scene) {
             if (!scene) return false;
+            let hits = 0;
             for (const m of scene.monsters) {
                 if (!m.alive) continue;
                 const d = Math.abs(m.gridX - hero.gridX) + Math.abs(m.gridY - hero.gridY);
-                if (d <= 4) m.attack = Math.max(1, Math.floor(m.attack / 2));
+                if (d <= 4) { m.attack = Math.max(1, Math.floor(m.attack / 2)); hits++; }
             }
+            // Visual flash effect
+            scene.cameras.main.flash(200, 255, 255, 200);
+            scene._floatingText(hero.gridX, hero.gridY, `✦ Blendet ${hits} monstre!`, '#ffffaa');
             return true;
         }
     },

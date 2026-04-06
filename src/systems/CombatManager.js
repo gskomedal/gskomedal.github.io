@@ -92,8 +92,10 @@ class CombatManager {
 
     _heroAttack(monster) {
         const scene = this.scene;
-        let dmg  = scene.hero.attack + Math.floor(Math.random() * 3);
-        const crit = scene.hero.critChance > 0 && Math.random() < scene.hero.critChance;
+        const cb = scene.hero.getCrystalBonuses();
+        let dmg  = scene.hero.attack + cb.attack + Math.floor(Math.random() * 3);
+        const totalCrit = scene.hero.critChance + cb.critChance;
+        const crit = totalCrit > 0 && Math.random() < totalCrit;
         if (crit) dmg *= 2;
 
         const lx = scene.hero.graphics.x + Math.sign(monster.gridX - scene.hero.gridX) * 9;
@@ -140,26 +142,70 @@ class CombatManager {
         scene.monsters = scene.monsters.filter(m => m !== monster);
         scene.monstersKilled++;
 
-        const goldBase = GOLD_DROP[monster.type] || 5;
-        const gold = goldBase + Math.floor(Math.random() * goldBase * 0.5) + scene.worldNum * 2;
+        const goldBase = GOLD_DROP[monster.type] || (monster.type === 'zone_boss' ? 200 : 5);
+        const crystalGoldMul = 1 + (scene.hero.getCrystalBonuses().goldMultiplier || 0);
+        const gold = Math.round((goldBase + Math.floor(Math.random() * goldBase * 0.5) + scene.worldNum * 2) * crystalGoldMul);
         scene.hero.gold += gold;
         scene._floatingText(monster.gridX, monster.gridY, `+${gold}g`, '#ffcc00');
-        if (monster.type === 'boss') {
+
+        if (monster.type === 'zone_boss') {
+            // ── Zone boss killed – spectacular reward ────────────────────────
+            const zoneName = typeof getZone !== 'undefined' ? getZone(scene.worldNum).name : 'Sone';
+
+            // Drop guaranteed high-tier mineral + best item
+            const bossItem = randomItemForWorld(Math.min(scene.worldNum + 2, 10), 1);
+            if (bossItem) scene.itemSpawner.spawnItemAt(monster.gridX, monster.gridY, bossItem);
+            if (typeof rollBossMineral !== 'undefined') {
+                scene.itemSpawner.spawnMineralAt(monster.gridX, monster.gridY, rollBossMineral(scene.worldNum));
+                scene.itemSpawner.spawnMineralAt(monster.gridX + 1, monster.gridY, rollBossMineral(scene.worldNum));
+            }
+
+            // Unlock Chem Lab in Camp Room on first zone boss kill
+            if (!scene.hero.chemLabUnlocked) {
+                scene.hero.chemLabUnlocked = true;
+                scene._floatingText(monster.gridX, monster.gridY - 2, 'Kjemisk lab ulåst i leirplassen!', '#33dd88');
+            }
+
+            // Screen flash effect
+            const flash = scene.add.rectangle(
+                scene.cameras.main.width / 2, scene.cameras.main.height / 2,
+                scene.cameras.main.width, scene.cameras.main.height,
+                0xffcc00, 0.6
+            ).setDepth(100).setScrollFactor(0);
+            scene.tweens.add({
+                targets: flash, alpha: 0, duration: 800,
+                onComplete: () => flash.destroy()
+            });
+
+            // Victory text
+            scene._floatingText(monster.gridX, monster.gridY - 1, `${zoneName} beseiret!`, '#ffcc00');
+
+        } else if (monster.type === 'boss') {
             const bossItem = randomItemForWorld(Math.min(scene.worldNum + 1, 7), 1);
             if (bossItem) scene.itemSpawner.spawnItemAt(monster.gridX, monster.gridY, bossItem);
-        } else if (Math.random() < 0.25) {
-            const item = Math.random() < 0.7
-                ? randomItemByType(scene.worldNum, 'consumable', new Set())
-                  || randomItemForWorld(scene.worldNum)
-                : randomItemForWorld(scene.worldNum);
-            scene.itemSpawner.spawnItemAt(monster.gridX, monster.gridY, item);
+        } else {
+            // Regular monster drop: increased rate at higher levels (#59)
+            const dropChance = Math.min(0.5, 0.25 + scene.worldNum * 0.03);
+            if (Math.random() < dropChance) {
+                const item = Math.random() < 0.7
+                    ? randomItemByType(scene.worldNum, 'consumable', new Set())
+                      || randomItemForWorld(scene.worldNum)
+                    : randomItemForWorld(scene.worldNum);
+                scene.itemSpawner.spawnItemAt(monster.gridX, monster.gridY, item);
+            }
+            // Extra chance for healing items on higher levels (#59)
+            if (scene.worldNum >= 3 && Math.random() < 0.15) {
+                const healId = Math.random() < 0.6 ? 'health_pot' : (Math.random() < 0.5 ? 'antidote' : 'big_health_pot');
+                const healDef = ITEM_DEFS[healId];
+                if (healDef) scene.itemSpawner.spawnItemAt(monster.gridX, monster.gridY, healDef);
+            }
         }
 
         // Mineral drops (Elements mod)
         if (typeof rollMineralForWorld !== 'undefined') {
-            const mineralDropChance = monster.type === 'boss' ? 1.0 : 0.15;
+            const mineralDropChance = (monster.type === 'boss' || monster.type === 'zone_boss') ? 1.0 : 0.15;
             if (Math.random() < mineralDropChance) {
-                const mineralDef = monster.type === 'boss'
+                const mineralDef = (monster.type === 'boss' || monster.type === 'zone_boss')
                     ? rollBossMineral(scene.worldNum)
                     : rollMineralForWorld(scene.worldNum);
                 scene.itemSpawner.spawnMineralAt(monster.gridX, monster.gridY, mineralDef);

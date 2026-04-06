@@ -71,6 +71,7 @@ class Hero {
 
         // Chemistry mod (Phase 3)
         this.chemistUnlocked = false;
+        this.chemLabUnlocked = false; // unlocked by defeating first zone boss
         this.potionDurationBonus = 0;
         this.potionPotencyBonus = 0;
         this.chemBombBonus = 0;
@@ -229,12 +230,33 @@ class Hero {
         this.xpToNext = Math.floor(XP_BASE * Math.pow(XP_GROWTH, this.level - 1));
     }
 
-    /** Returns true if hero died. Accounts for dodge. */
+    /** Calculate passive bonuses from crystals carried in the backpack. */
+    getCrystalBonuses() {
+        const bonuses = { attack: 0, defense: 0, maxHearts: 0, visionRadius: 0,
+            poisonResist: 0, burnResist: 0, goldMultiplier: 0,
+            critChance: 0, dodgeChance: 0 };
+        if (typeof MINERAL_DEFS === 'undefined') return bonuses;
+        for (const entry of this.inventory.backpack) {
+            if (!entry || !entry.id || entry.count === undefined) continue;
+            const def = MINERAL_DEFS[entry.id];
+            if (!def || def.subtype !== 'crystal' || !def.effect) continue;
+            const count = entry.count || 1;
+            for (const [key, val] of Object.entries(def.effect)) {
+                if (bonuses[key] !== undefined) bonuses[key] += val * count;
+            }
+        }
+        return bonuses;
+    }
+
+    /** Returns true if hero died. Accounts for dodge and crystal bonuses. */
     takeDamage(amount) {
-        if (this.dodgeChance > 0 && Math.random() < this.dodgeChance) {
+        const cb = this.getCrystalBonuses();
+        const totalDodge = this.dodgeChance + cb.dodgeChance;
+        if (totalDodge > 0 && Math.random() < totalDodge) {
             return false; // dodged – hero is fine
         }
-        const dmg = Math.max(1, amount - this.defense);
+        const totalDef = this.defense + cb.defense;
+        const dmg = Math.max(1, amount - totalDef);
         this.hearts -= dmg;
         if (this.hearts <= 0) {
             this.hearts = 0;
@@ -300,6 +322,7 @@ class Hero {
             campStash:            this.campStash.map(e => ({ ...e })),
             // Chemistry mod
             chemistUnlocked:      this.chemistUnlocked,
+            chemLabUnlocked:      this.chemLabUnlocked,
             potionDurationBonus:  this.potionDurationBonus,
             potionPotencyBonus:   this.potionPotencyBonus,
             chemBombBonus:        this.chemBombBonus,
@@ -334,7 +357,7 @@ class Hero {
         this.burnTurns    = stats.burnTurns    || 0;
         this.slowTurns    = stats.slowTurns    || 0;
         this.stunTurns    = stats.stunTurns    || 0;
-        this.skills       = stats.skills       ? [...stats.skills] : [];
+        this.skills       = stats.skills       ? migrateSkills([...stats.skills]) : [];
         this.tempBuffs    = (stats.tempBuffs || []).map(b => ({ ...b }));
         // Elements mod
         this.elementTracker       = ElementTracker.deserialize(stats.elementTracker || null);
@@ -353,6 +376,7 @@ class Hero {
         this.campStash            = (stats.campStash || []).map(e => ({ ...e }));
         // Chemistry mod
         this.chemistUnlocked      = stats.chemistUnlocked      || false;
+        this.chemLabUnlocked      = stats.chemLabUnlocked      || false;
         this.potionDurationBonus  = stats.potionDurationBonus  || 0;
         this.potionPotencyBonus   = stats.potionPotencyBonus   || 0;
         this.chemBombBonus        = stats.chemBombBonus        || 0;
