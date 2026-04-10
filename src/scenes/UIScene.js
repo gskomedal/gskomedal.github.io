@@ -24,44 +24,64 @@ class UIScene extends Phaser.Scene {
         this.xpFill    = this.add.graphics();
         this.eqGfx     = this.add.graphics();
 
-        const ts = { fontSize: '11px', color: '#8899bb', fontFamily: 'monospace' };
+        const ts = { fontSize: '13px', color: '#8899bb', fontFamily: 'monospace' };
         const DIFF_COL  = { easy: '#44bb44', normal: '#4488ff', hard: '#ff5555' };
         const DIFF_LBL  = { easy: 'LETT', normal: 'NORMAL', hard: 'VANSKELIG' };
         const diff      = this.gameScene.difficulty || 'normal';
         this.add.text(W - 14, 8, DIFF_LBL[diff] || 'NORMAL', {
-            fontSize: '9px', color: DIFF_COL[diff] || '#4488ff', fontFamily: 'monospace'
+            fontSize: '11px', color: DIFF_COL[diff] || '#4488ff', fontFamily: 'monospace'
         }).setOrigin(1, 0);
 
         this.worldText  = this.add.text(W - 50, 8,  '', { ...ts, color: '#aaaacc' }).setOrigin(1, 0);
         this.levelText  = this.add.text(W - 50, 22, '', ts).setOrigin(1, 0);
         this.atkText    = this.add.text(W - 50, 36, '', ts).setOrigin(1, 0);
-        this.goldText   = this.add.text(10, 30, '', { fontSize: '11px', color: '#ffcc00', fontFamily: 'monospace' });
-        this.eqText     = this.add.text(10, 56, '', { fontSize: '10px', color: '#556677', fontFamily: 'monospace' });
-        this.eHint      = this.add.text(W - 50, 56, '[SPACE/F] Angrep  [R] Pil  [Q] Bruk  [E] Inventar  [+/-] Zoom', { fontSize: '10px', color: '#334455', fontFamily: 'monospace' }).setOrigin(1, 0);
+        this.goldText   = this.add.text(10, 30, '', { fontSize: '13px', color: '#ffcc00', fontFamily: 'monospace' });
+        this.eqText     = this.add.text(10, 56, '', { fontSize: '12px', color: '#556677', fontFamily: 'monospace' });
+        this.eHint      = this.add.text(W - 50, 56, '[SPACE/F] Angrep  [R] Pil  [Q] Bruk  [E] Inventar  [+/-] Zoom', { fontSize: '12px', color: '#334455', fontFamily: 'monospace' }).setOrigin(1, 0);
 
         // Status effect indicators
         this.statusText = this.add.text(10, 70, '', {
-            fontSize: '11px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold'
+            fontSize: '13px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold'
         });
         this.statusText.setVisible(false);
 
         // Pet info
         this.petText = this.add.text(W / 2 - 60, 30, '', {
-            fontSize: '10px', color: '#ffaadd', fontFamily: 'monospace'
+            fontSize: '12px', color: '#ffaadd', fontFamily: 'monospace'
         });
         this.petHpGfx = this.add.graphics();
 
-        // Settings gear button
-        const gearBtn = this.add.text(W - 14, 10, '⚙', { fontSize: '18px', color: '#445566', fontFamily: 'monospace' })
-            .setOrigin(1, 0)
-            .setInteractive({ useHandCursor: true });
-        gearBtn.on('pointerover',  () => gearBtn.setColor('#88bbff'));
-        gearBtn.on('pointerout',   () => gearBtn.setColor('#445566'));
-        gearBtn.on('pointerdown',  () => {
-            Audio.init();
-            if (!this.scene.isActive('SettingsScene')) {
-                this.scene.launch('SettingsScene');
-            }
+        // HUD buttons – centered in the top bar
+        const hudBtns = [
+            { label: '📖', scene: 'ElementBookScene',
+              launchData: () => ({ heroRef: this.gameScene.hero }) },
+            { label: '⚔', scene: 'SkillScene',
+              launchData: () => ({ heroRef: this.gameScene.hero, viewOnly: true }) },
+            { label: '🎒', scene: 'InventoryScene',
+              launchData: () => ({}) },
+            { label: '⚙', scene: 'SettingsScene',
+              launchData: () => ({}) },
+        ];
+        const btnSpacing = 28;
+        const totalW = (hudBtns.length - 1) * btnSpacing;
+        let btnX = W / 2 - totalW / 2;
+        hudBtns.forEach(def => {
+            const btn = this.add.text(btnX, 10, def.label, {
+                fontSize: '16px', color: '#445566', fontFamily: 'monospace'
+            }).setOrigin(0.5, 0).setInteractive({ useHandCursor: true });
+            btn.on('pointerover', () => btn.setColor('#88bbff'));
+            btn.on('pointerout',  () => btn.setColor('#445566'));
+            btn.on('pointerdown', () => {
+                Audio.init();
+                if (!this.scene.isActive(def.scene)) {
+                    if (def.scene === 'SettingsScene') {
+                        this.scene.launch(def.scene);
+                    } else if (this.gameScene?.hero) {
+                        this.scene.launch(def.scene, def.launchData());
+                    }
+                }
+            });
+            btnX += btnSpacing;
         });
 
         // Hide keyboard hints on touch devices
@@ -95,7 +115,7 @@ class UIScene extends Phaser.Scene {
     _makeBossBar(W) {
         const c = this.add.container(W / 2, 68);
         c.setVisible(false);
-        const label = this.add.text(0, 0, '', { fontSize: '11px', color: '#ff4488', fontFamily: 'monospace' }).setOrigin(0.5, 0);
+        const label = this.add.text(0, 0, '', { fontSize: '13px', color: '#ff4488', fontFamily: 'monospace' }).setOrigin(0.5, 0);
         const bg    = this.add.graphics();
         bg.fillStyle(0x330011);
         bg.fillRect(-90, 14, 180, 10);
@@ -274,8 +294,9 @@ class UIScene extends Phaser.Scene {
         const wpn = inv.equipped.weapon;
         const arm = inv.equipped.armor;
         const parts = [];
-        if (wpn) parts.push(`[${wpn.name}]`);
-        if (arm) parts.push(`[${arm.name}]`);
+        const _trunc = (n, mx) => n.length > mx ? n.slice(0, mx - 1) + '…' : n;
+        if (wpn) parts.push(`[${_trunc(wpn.name, 18)}]`);
+        if (arm) parts.push(`[${_trunc(arm.name, 18)}]`);
         this.eqText.setText(parts.length ? parts.join('  ') : '');
         // Color equipped text by highest rarity
         const bestRarity = [wpn, arm].reduce((best, it) => {

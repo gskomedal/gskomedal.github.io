@@ -7,7 +7,6 @@ class ChemLabScene extends Phaser.Scene {
 
     init(data) {
         this.heroRef = data.heroRef || null;
-        this.gs = data.gameScene || null;
     }
 
     create() {
@@ -27,9 +26,38 @@ class ChemLabScene extends Phaser.Scene {
         this.px = cx - this.panelW / 2;
         this.py = cy - this.panelH / 2;
 
+        // ── Lab background art (behind everything) ──────────────────────────
         const panel = this.add.graphics();
-        panel.fillStyle(0x081808, 0.97);
+        panel.fillStyle(0x080a10, 0.97);
         panel.fillRoundedRect(this.px, this.py, this.panelW, this.panelH, 8);
+        if (SceneBackgrounds.addLabBackground) {
+            SceneBackgrounds.addLabBackground(this, this.px, this.py, this.panelW, this.panelH);
+        }
+
+        // ── Character portrait (sits in the scene, lower-right of bg) ─────────
+        const portraitSize = 120;
+        const portraitX = this.px + this.panelW - portraitSize - 6;
+        const portraitY = this.py + this.panelH - portraitSize - 6;
+        const portraitGfx = this.add.graphics();
+        if (this.heroRef) {
+            const eq = this.heroRef.inventory ? this.heroRef.inventory.equipped : {};
+            if (typeof drawDetailedCharacterSprite === 'function') {
+                drawDetailedCharacterSprite(portraitGfx, portraitX, portraitY, portraitSize, this.heroRef.appearance, this.heroRef.race, eq);
+            } else {
+                drawCharacterSprite(portraitGfx, portraitX, portraitY, portraitSize, this.heroRef.appearance, this.heroRef.race);
+            }
+        }
+
+        // ── Dark content area (high contrast zone for UI) ─────────────────────
+        const contentLeft = this.px + 6;
+        const contentTop = this.py + 6;
+        const contentW = this.panelW - 12;
+        const contentH = 60;
+        const uiGfx = this.add.graphics();
+        uiGfx.fillStyle(0x080a10, 0.82);
+        uiGfx.fillRoundedRect(contentLeft, contentTop, contentW, contentH, 6);
+
+        // Panel border
         panel.lineStyle(2, 0x33dd88);
         panel.strokeRoundedRect(this.px, this.py, this.panelW, this.panelH, 8);
 
@@ -41,7 +69,7 @@ class ChemLabScene extends Phaser.Scene {
         // Fuel indicator
         const fuel = this.smelter.calculateFuelEnergy(this.heroRef);
         this._fuelText = this.add.text(this.px + this.panelW - 20, this.py + 18, `Energi: ${fuel}`, {
-            fontSize: '10px', color: '#448844', fontFamily: 'monospace'
+            fontSize: '12px', color: '#448844', fontFamily: 'monospace'
         }).setOrigin(1, 0.5);
 
         this.add.rectangle(cx, this.py + 34, this.panelW - 20, 1, 0x113322);
@@ -60,7 +88,7 @@ class ChemLabScene extends Phaser.Scene {
             const fx = this.px + 30 + i * 100 + 45;
             const active = this._filter === f.id;
             const btn = this.add.text(fx, filterY, f.label, {
-                fontSize: '10px', color: active ? '#33dd88' : '#335533',
+                fontSize: '12px', color: active ? '#33dd88' : '#335533',
                 fontFamily: 'monospace', fontStyle: active ? 'bold' : 'normal'
             }).setOrigin(0.5).setInteractive({ useHandCursor: true });
             btn.on('pointerdown', () => { this._filter = f.id; this._refresh(); });
@@ -90,19 +118,41 @@ class ChemLabScene extends Phaser.Scene {
     }
 
     _refresh() {
-        for (const o of this._dyn) { if (o && o.destroy) o.destroy(); }
-        this._dyn = [];
+        UIHelper.clearDynamic(this._dyn);
 
-        const filters = ['all', 'potion', 'explosive', 'medicine', 'acid'];
-        this._filterBtns.forEach((btn, i) => {
-            btn.setColor(this._filter === filters[i] ? '#33dd88' : '#335533');
-            btn.setFontStyle(this._filter === filters[i] ? 'bold' : 'normal');
-        });
+        // Dark backing behind content for readability
+        const cbg = this._d(this.add.graphics());
+        cbg.fillStyle(0x080a10, 0.78);
+        cbg.fillRoundedRect(this.px + 6, this.contentY - 4, this.panelW - 150, this.panelH - (this.contentY - this.py) - 10, 4);
+
+        UIHelper.updateTabButtons(this._filterBtns, ['all', 'potion', 'explosive', 'medicine', 'acid'], this._filter, '#33dd88', '#335533');
 
         const fuel = this.smelter.calculateFuelEnergy(this.heroRef);
         this._fuelText.setText(`Energi: ${fuel}`);
 
-        this._drawRecipes(fuel);
+        if (this._hasKjemikerSkill()) {
+            this._drawRecipes(fuel);
+        } else {
+            this._drawLockedMessage();
+        }
+    }
+
+    _hasKjemikerSkill() {
+        return (this.heroRef.skills || []).some(s =>
+            s === 'potent_potions' || s === 'acid_mastery' || s === 'explosive_genius'
+        );
+    }
+
+    _drawLockedMessage() {
+        const cx = this.px + this.panelW / 2;
+        const cy = this.contentY + (this.panelH - (this.contentY - this.py)) / 2 - 40;
+        this._d(this.add.text(cx, cy, '🔒', { fontSize: '32px' }).setOrigin(0.5));
+        this._d(this.add.text(cx, cy + 30, 'Krever Kjemiker-skill!', {
+            fontSize: '14px', color: '#33dd88', fontFamily: 'monospace', fontStyle: 'bold'
+        }).setOrigin(0.5));
+        this._d(this.add.text(cx, cy + 50, 'Lær Potente potions i skilltreet\nfor å bruke laboratoriet.', {
+            fontSize: '12px', color: '#445544', fontFamily: 'monospace', align: 'center'
+        }).setOrigin(0.5));
     }
 
     _d(obj) { this._dyn.push(obj); return obj; }
@@ -125,7 +175,7 @@ class ChemLabScene extends Phaser.Scene {
 
         if (allMols.length === 0) {
             this._d(this.add.text(cx, y + 40, 'Ingen oppskrifter tilgjengelig.', {
-                fontSize: '11px', color: '#334433', fontFamily: 'monospace'
+                fontSize: '13px', color: '#334433', fontFamily: 'monospace'
             }).setOrigin(0.5));
         }
 
@@ -148,12 +198,13 @@ class ChemLabScene extends Phaser.Scene {
             const icon = icons[m.subtype] || '⚗';
             this._d(this.add.text(leftX + 6, my + 4, icon, { fontSize: '12px' }));
 
-            // Name + formula
-            this._d(this.add.text(leftX + 24, my + 5, `${m.name}`, {
-                fontSize: '11px', color: hexCol, fontFamily: 'monospace', fontStyle: 'bold'
+            // Name + formula – truncate long names to fit slot
+            const dispName = m.name.length > 28 ? m.name.slice(0, 27) + '…' : m.name;
+            this._d(this.add.text(leftX + 24, my + 5, dispName, {
+                fontSize: '13px', color: hexCol, fontFamily: 'monospace', fontStyle: 'bold'
             }));
             this._d(this.add.text(leftX + 24, my + 19, `${m.formula}  [T${m.tier}]`, {
-                fontSize: '8px', color: '#556655', fontFamily: 'monospace'
+                fontSize: '12px', color: '#556655', fontFamily: 'monospace'
             }));
 
             // Recipe elements
@@ -163,17 +214,17 @@ class ChemLabScene extends Phaser.Scene {
                 return `${r.symbol}:${have}/${r.amount}${ok ? '' : '!'}`;
             }).join('  ');
             this._d(this.add.text(leftX + 6, my + 33, recipeStr, {
-                fontSize: '8px', color: '#556655', fontFamily: 'monospace'
+                fontSize: '12px', color: '#556655', fontFamily: 'monospace'
             }));
 
             // Effect preview
             this._d(this.add.text(leftX + colW - 8, my + 36, m.desc.length > 35 ? m.desc.slice(0, 33) + '…' : m.desc, {
-                fontSize: '7px', color: '#445544', fontFamily: 'monospace'
+                fontSize: '12px', color: '#445544', fontFamily: 'monospace'
             }).setOrigin(1, 0));
 
             if (can) {
                 const btn = this._d(this.add.text(leftX + colW - 50, my + 10, '[ Lag ]', {
-                    fontSize: '11px', color: '#33dd88', fontFamily: 'monospace', fontStyle: 'bold'
+                    fontSize: '13px', color: '#33dd88', fontFamily: 'monospace', fontStyle: 'bold'
                 }).setInteractive({ useHandCursor: true }));
                 btn.on('pointerover', () => btn.setColor('#66ffaa'));
                 btn.on('pointerout', () => btn.setColor('#33dd88'));
@@ -198,18 +249,11 @@ class ChemLabScene extends Phaser.Scene {
 
         // Add product to inventory
         const added = hero.inventory.addItem(result.item);
-        if (!added && this.gs) {
-            this.gs.itemSpawner.spawnItemAt(hero.gridX, hero.gridY, result.item);
+        if (!added) {
+            EventBus.emit('spawnItem', { gx: hero.gridX, gy: hero.gridY, item: result.item });
         }
 
-        // Unlock chemist path
-        if (!hero.chemistUnlocked && this.gs) {
-            this.gs._floatingText(hero.gridX, hero.gridY - 1, 'Kjemiker-stien er ulåst!', '#33dd88');
-        }
-
-        if (this.gs) {
-            this.gs._floatingText(hero.gridX, hero.gridY, `Laget: ${result.item.name}!`, '#33dd88');
-        }
+        EventBus.emit('floatingText', { gx: hero.gridX, gy: hero.gridY, msg: `Laget: ${result.item.name}!`, color: '#33dd88' });
 
         Audio.playPickup();
         this._refresh();
@@ -217,14 +261,14 @@ class ChemLabScene extends Phaser.Scene {
 
     _drawElementCounts(x, y, w) {
         this._d(this.add.text(x, y, 'GRUNNSTOFFER:', {
-            fontSize: '9px', color: '#556655', fontFamily: 'monospace', fontStyle: 'bold'
+            fontSize: '13px', color: '#556655', fontFamily: 'monospace', fontStyle: 'bold'
         }));
 
         const collected = this.heroRef.elementTracker.collected;
         const entries = Object.entries(collected).filter(([, v]) => v > 0);
         if (entries.length === 0) {
             this._d(this.add.text(x, y + 14, 'Ingen lagret.', {
-                fontSize: '9px', color: '#334433', fontFamily: 'monospace'
+                fontSize: '13px', color: '#334433', fontFamily: 'monospace'
             }));
             return;
         }
@@ -235,7 +279,7 @@ class ChemLabScene extends Phaser.Scene {
             const col = elem ? elem.color : 0xaaaaaa;
             const hexCol = '#' + col.toString(16).padStart(6, '0');
             const badge = this._d(this.add.text(bx, by, `${symbol}:${count}`, {
-                fontSize: '9px', color: hexCol, fontFamily: 'monospace',
+                fontSize: '13px', color: hexCol, fontFamily: 'monospace',
                 backgroundColor: '#081808', padding: { x: 3, y: 1 }
             }));
             bx += badge.width + 6;

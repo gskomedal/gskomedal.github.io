@@ -2,6 +2,109 @@
 
 ---
 
+## v0.34 – 2026-04-10
+
+### Nye funksjoner
+- **Mineraler krever Geolog-skill:** Mineraler er nå usynlige på kartet uten Malmøye-skillen (Geolog T1). Helten kan fortsatt plukke opp mineraler blindt ved å gå over dem
+- **Smelting krever Metallurg-skill:** Smelt-, Legering- og Smi-fanene i smelteovnen er låst bak Metallurg-skill. Lager-fanen er alltid tilgjengelig
+- **Kjemi krever Kjemiker-skill:** Syntese i kjemisk lab er låst bak Kjemiker-skill
+- **HUD-knapper:** Elementbok (📖), Skilltre (⚔) og Inventar (🎒) tilgjengelig som knapper øverst til høyre i HUD-baren
+- **Nye opplåsingsbetingelser:** Metallurg-stien låses opp ved besøk i leirplass (ikke lenger ved første smelting). Kjemiker-stien låses opp ved besøk i kjemisk lab (ikke lenger ved første syntese)
+
+### Tekniske endringer
+- MapRenderer toggler mineral-grafikk synlighet basert på Geolog-skill i updateFog()
+- SmelteryScene og ChemLabScene sjekker hero.skills[] for aktive skill-krav
+- UIScene utvidet med 3 interaktive snarveiknapper
+- Skill unlock conditions endret: metallurg='camp_room_found', kjemiker='chem_lab_found'
+- Fjernet auto-unlock av metallurgist/chemist fra SmelteryScene og ChemistrySystem
+### Forbedringer
+- **Skarpere tekst:** `pixelArt:true` fjernet fra Phaser-config (tvang NEAREST-filtrering på tekst). All tekst rendres i 2× oppløsning. CSS `image-rendering: pixelated` fjernet fra canvas
+- **Tekst-overflow fikset:** Varenavn i handelsmann, tooltips i inventar, mineralnavn i smelteverket, molekylnavn i kjemilabben og utstyrsnavn i HUD forkortes/brytes nå slik at de holder seg innenfor panelgrensene
+- **Inventar-tekst:** Utstyrsnavn, hurtigbruk og ryggsekk-etiketter krympet til 11px med trunkering for å holde seg innenfor rammene
+- **Elementbok:** Tabellen er høyere (cellehøyde 28→36px, panel 580→700px). Symboler vist i 14px med atomnummer i 10px for bedre lesbarhet
+- **Ferdighetstreet:** Karakter-portrettet fjernet for å unngå overlapp. Synergier flyttet opp rett under skill-kortene med flerradslayout (5 per rad)
+
+---
+
+## v0.33 – 2026-04-10
+
+### Nye funksjoner
+- **Flerstemt musikksystem:** Helt nytt musikksystem med flerstemt polyfoni (3-5 stemmer per stykke) i stedet for den gamle enkeltstemme-sekvenseren
+- **8 Grieg-inspirerte komposisjoner:** Morgenstemning, Dovregubbens hall, Solveigs vuggevise, Trollenes marsj, Holberg Suite, Peer Gynts hjemkomst, Åses død og Triumfmarsj
+- **Variable notelengder:** Hver stemme har nå individuelle notelengder i stedet for fast 1/16-takt
+- **Velocity-humanisering:** Subtil tilfeldig volumvariasjon per note for mer levende lyd
+- **Ren stopp av musikk:** Aktive oscillatorer stoppes umiddelbart ved sceneskifte eller musikk-av
+
+### Tekniske endringer
+- Ny `musicPieces.js` datafil med 8 stykker, notefrekvenstabell og hjelpe-funksjoner
+- AudioManager omskrevet med look-ahead scheduling (Web Audio API-tidsstyrt) for presis flerstemt synkronisering
+- Musikkdata separert fra logikk (følger eksisterende mønster med separate datafiler)
+
+---
+
+## v0.9 – 2026-04-09
+
+### Nye funksjoner
+- **Større og lesbar tekst (#79):** Alle fontstørrelser i spillet økt med 2-3px. Minimumsstørrelse er nå 10px (fra 7px). Bedre lesbarhet i alle scener og menyer
+- **Forbedret karakterskaper (#80):** CharacterCreatorScene bruker nå hele 1280×800-lerret. Større rasetabs (120px), bredere stat-barer (220px), større bonusknapper, større navnefelt. Alle fonter økt til 13-15px
+- **Touch-zoom og fullskjerm (#78):** Nye knapper for zoom inn (+), zoom ut (−) og fullskjerm (⛶) øverst til høyre for berøringsskjermer. Fullskjerm bruker Fullscreen API med webkit-fallback
+- **Geolog-skillz styrket (#81):** Malmøye gir nå også mineral-identifisering – uten Geolog-skill vises mineraler som «Ukjent mineral» og elementer oppdages ikke automatisk. Effektiv utvinning gir nå +1 ekstra element per smelting
+- **Metallurg-skillz styrket (#81):** Rask smelting gir nå også +15% sjanse for ekstra utbytte. Legeringsmester gir 20% sjanse for dobbel legering-output. Mestersmie økt til +30% stats og gir spesialegenskaper (våpen: +10% krit, rustning: +1 torneskade)
+
+### Forbedringer
+- **SkillScene utvidet (#79):** Panelet fyller nå hele skjermen (1260×780 i stedet for 940×520). Skill-kort økt til 220×108px med mer plass til tekst og beskrivelser
+- **CharacterCreatorScene fullstendig redesignet (#80):** Ny tre-kolonne layout som fyller hele 1280×800-lerret. Venstre: 2×2 rase-rutenett + egenskaper. Senter: Stort forhåndsvisningsfelt (280px) + heltenavn. Høyre: Utseende-tilpasning. Bunnfelt: Startbonus + startknapp. Visuelt sammenhengende med seksjonspaneler
+
+### Tekniske endringer
+- Fontstørrelser justert i alle 11 scene-filer
+- SkillScene: panelW/panelH bruker nå W-20/H-20, cardW opptil 220px, cardH 108px, tierH 140px
+- CharacterCreatorScene: Fullstendig omskrevet med tre-kolonne panelstruktur og seksjonspaneler
+- TouchControls utvidet med zoom/fullskjerm-knapper og Fullscreen API-integrasjon
+- InputHandler støtter nå touch_zoom_in/touch_zoom_out registry-flagg
+- Nye hero-egenskaper: mineralIdentifyLevel, smeltBonusElement, smeltExtraYieldChance, doubleAlloyChance
+- SmeltingSystem.smelt() støtter bonuselement og ekstra utbytte-mekanikk
+- SmeltingSystem.forgeEquipment() legger til spesialegenskaper ved Mestersmie
+
+---
+
+## v0.32 – 2026-04-08
+
+### Nye funksjoner
+- **Detaljert karakterportrett:** Ny høyoppløselig karaktertegning (64-grid) med iris/pupill i øynene, nesebor, detaljerte lepper, synlige fingre, hår-highlights, klærfolder og sømmer. Viser også utstyrt våpen og rustning på figuren
+- **Karakterportrett i menyer:** Detaljert karakterportrett vises nå i Inventar, Ferdighetstreet, Leirplass og Kjemisk laboratorium
+- **Leirplass visuelt tema:** Smelteovn-skjermen har nå tematisk bakgrunn med bål, telt, trær, stjernehimmel, røyk og stein – ser ut som en ekte leirplass
+- **Kjemilab visuelt tema:** Laboratorium-skjermen har nå tematisk bakgrunn med labbenk, hyller med fargerike flasker, erlenmeyerkolber, reagensrør, periodisk tabell-hint, bobler og damp
+
+### Tekniske endringer
+- Ny `DetailedCharacterSprite.js` med `drawDetailedCharacterSprite()` funksjon (64-enhets grid, dobbel oppløsning)
+- Ny `SceneBackgrounds.js` med `drawCampBackground()` og `drawChemLabBackground()` funksjoner
+- SmelteryScene, ChemLabScene, SkillScene og InventoryScene oppdatert med karakterportretter
+- SmelteryScene og ChemLabScene bruker semi-transparente paneler for å vise tematiske bakgrunner
+
+---
+
+## v0.31 – 2026-04-07
+
+### Nye funksjoner
+- **Forbedret musikk-kvalitet:** Alle 8 musikktemaer utvidet fra 16 til 64 noter per melodi (4 fraser: A–B–A'–C), basslinjer fra 8 til 32 noter, kontramelodier fra 16 til 64 noter, og akkordprogresjoner fra 4 til 8. Full loop er nå ~27 sekunder i stedet for ~7 sekunder
+- **Perkusjon:** Nytt rytme-lag med noise-basert perkusjon tilpasset hvert tema (sparsomt for Is, drivende for Vulkan, marsj-aktig for Kjerne)
+- **Velocity-variasjon:** Subtil tilfeldig volumvariasjon (±15%) på melodi og kontramellodi for mer levende, humanisert lyd
+
+---
+
+## v0.29 – 2026-04-06
+
+### Tekniske endringer
+- **Kodestruktur refaktorert:** Grafikk-kode ekstrahert fra ItemSpawner.js (→ ItemGraphics.js) og Monster.js (→ MonsterGraphics.js), reduserer filstørrelser med ~500 linjer. Ny UIHelper.js samler felles UI-mønster
+- **EventBus:** Ny lettevekts pub/sub-system for løs kobling mellom scener. SmelteryScene, ChemLabScene og InventoryScene bruker nå EventBus (`floatingText`, `showMessage`, `spawnItem`) i stedet for direkte GameScene-referanser. `gameScene`-parameteren fjernet fra alle tre scener
+- **HeroCrafting:** Elements/Metallurgy/Chemistry-tilstand ekstrahert fra Hero.js til HeroCrafting.js (init, serialize, applyStats) – reduserer Hero.js med ~80 linjer
+- **CombatManager:** Skadeberegning ekstrahert til statiske `calculateHeroDamage()` og `calculateMonsterDamage()` metoder – testbare uten Phaser
+- **SmelteryScene deduplisert:** `_doSmelt` og `_doSmeltFromStash` slått sammen til felles `_doSmeltFrom()`
+- **Testinfrastruktur:** 9 test-suiter (~70 tester): Inventory, MazeGenerator, SmeltingSystem, UIHelper, Hero, EventBus, ChemistrySystem, Monster og CombatManager
+- **Balansesimulator:** Automatiske assertions lagt til i simulator.html – sjekker seiersrate, nivå, verden nådd, HP, bosskill-rate og turer. Viser grønt/rødt resultat etter simulering
+
+---
+
 ## v0.28 – 2026-04-06
 
 ### Nye funksjoner

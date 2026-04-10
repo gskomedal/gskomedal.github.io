@@ -11,7 +11,6 @@ class InventoryScene extends Phaser.Scene {
         const gs  = this.scene.get('GameScene');
         this.hero = gs.hero;
         this.inv  = gs.hero.inventory;
-        this.gs   = gs;
         this.pet  = gs.pet;
 
         this._dyn = [];  // dynamic objects – destroyed on _refresh()
@@ -20,7 +19,7 @@ class InventoryScene extends Phaser.Scene {
         const cx = W / 2, cy = H / 2;
         this.add.rectangle(cx, cy, W, H, 0x000000, 0.78);
 
-        const panelW = 520;
+        const panelW = 740;
         const hasPet = this.pet && this.pet.alive;
         const bpCount = this.inv.backpack.length;
         const bpRows = Math.ceil(bpCount / 5);
@@ -29,23 +28,25 @@ class InventoryScene extends Phaser.Scene {
         const panelY = cy;
         this.add.rectangle(cx, panelY, panelW, panelH, 0x0d0b1e).setStrokeStyle(2, 0x334466);
 
-        this.add.text(cx, panelY - panelH / 2 + 18, 'INVENTAR', {
-            fontSize: '20px', color: '#ccddff', fontFamily: 'monospace', fontStyle: 'bold'
+        // Title shifted right to make room for portrait
+        const contentCX = cx + 100;
+        this.add.text(contentCX, panelY - panelH / 2 + 18, 'INVENTAR', {
+            fontSize: '22px', color: '#ccddff', fontFamily: 'monospace', fontStyle: 'bold'
         }).setOrigin(0.5);
 
-        this.add.rectangle(cx, panelY - panelH / 2 + 54, panelW - 40, 1, 0x223344);
+        this.add.rectangle(contentCX, panelY - panelH / 2 + 54, panelW - 250, 1, 0x223344);
 
         // Stats line – dynamic so it refreshes
-        this._statsText = this.add.text(cx, panelY - panelH / 2 + 40, '', {
-            fontSize: '11px', color: '#667788', fontFamily: 'monospace'
+        this._statsText = this.add.text(contentCX, panelY - panelH / 2 + 40, '', {
+            fontSize: '13px', color: '#667788', fontFamily: 'monospace'
         }).setOrigin(0.5);
 
-        // Section labels (static)
-        this.add.text(cx - panelW / 2 + 20, panelY - panelH / 2 + 62, 'UTSTYR', {
-            fontSize: '11px', color: '#445566', fontFamily: 'monospace'
+        // Section labels (static) - shifted right
+        this.add.text(contentCX - 220, panelY - panelH / 2 + 62, 'UTSTYR', {
+            fontSize: '13px', color: '#445566', fontFamily: 'monospace'
         });
-        this.add.text(cx, panelY - panelH / 2 + 168, 'EVNER', {
-            fontSize: '11px', color: '#445566', fontFamily: 'monospace'
+        this.add.text(contentCX, panelY - panelH / 2 + 168, 'EVNER', {
+            fontSize: '13px', color: '#445566', fontFamily: 'monospace'
         }).setOrigin(0.5);
         // RYGGSEKK label is drawn dynamically in _refresh() to show slot count
 
@@ -53,12 +54,12 @@ class InventoryScene extends Phaser.Scene {
             ? '[Trykk] Bruk/utstyr  ·  [Hold] → Kjæledyr/Slipp  ·  [E/ESC] Lukk'
             : '[Trykk] Bruk/utstyr  ·  [Hold] Slipp  ·  [E/ESC] Lukk';
         this.add.text(cx, panelY + panelH / 2 - 14, helpText, {
-            fontSize: '11px', color: '#334455', fontFamily: 'monospace'
+            fontSize: '13px', color: '#334455', fontFamily: 'monospace'
         }).setOrigin(0.5);
 
         // Element Book button
         const ebBtn = this.add.text(cx - panelW / 2 + 20, cy - panelH / 2 + 18, 'Elementbok [B]', {
-            fontSize: '10px', color: '#997755', fontFamily: 'monospace'
+            fontSize: '12px', color: '#997755', fontFamily: 'monospace'
         }).setOrigin(0, 0.5).setInteractive({ useHandCursor: true });
         ebBtn.on('pointerover', () => ebBtn.setColor('#ccaa77'));
         ebBtn.on('pointerout',  () => ebBtn.setColor('#997755'));
@@ -93,14 +94,13 @@ class InventoryScene extends Phaser.Scene {
     // ── Refresh all dynamic slot UI ───────────────────────────────────────────
 
     _refresh() {
-        // Destroy old dynamic objects
-        for (const o of this._dyn) { if (o && o.destroy) o.destroy(); }
-        this._dyn = [];
+        UIHelper.clearDynamic(this._dyn);
 
         const { width: W, height: H } = this.cameras.main;
         const cx = W / 2, cy = H / 2;
         const hasPet = this.pet && this.pet.alive;
-        const panelW = 520;
+        const panelW = 740;
+        const contentCX = cx + 100;
         const bpCount = this.inv.backpack.length;
         const bpRows = Math.ceil(bpCount / 5);
         const extraBpSpace = Math.max(0, (bpRows - 2) * 60);
@@ -113,19 +113,43 @@ class InventoryScene extends Phaser.Scene {
             `${h.heroName || 'Helten'}  ·  Nivå ${h.level}  ·  ATK ${h.attack}  ·  DEF ${h.defense}  ·  💰 ${h.gold}g`
         );
 
-        // Equipment slots
+        // ── Character portrait (left of equipment) ────────────────────────────
+        const portraitSize = 192;
+        const portraitX = cx - panelW / 2 + 16;
+        const portraitY = panelY - panelH / 2 + 60;
+        const pGfx = this._d(this.add.graphics());
+        pGfx.fillStyle(0x0a0918, 0.9);
+        pGfx.fillRoundedRect(portraitX - 4, portraitY - 4, portraitSize + 8, portraitSize + 8, 6);
+        pGfx.lineStyle(2, 0x334466, 0.6);
+        pGfx.strokeRoundedRect(portraitX - 4, portraitY - 4, portraitSize + 8, portraitSize + 8, 6);
+        // Floor hint in portrait
+        pGfx.fillStyle(0x1e1a30);
+        pGfx.fillRect(portraitX - 3, portraitY + portraitSize - 16, portraitSize + 6, 19);
+        const eq = this.inv.equipped || {};
+        if (typeof drawDetailedCharacterSprite === 'function') {
+            drawDetailedCharacterSprite(pGfx, portraitX, portraitY, portraitSize, h.appearance, h.race, eq);
+        } else {
+            drawCharacterSprite(pGfx, portraitX, portraitY, portraitSize, h.appearance, h.race);
+        }
+        // Pet portrait is drawn inline with pet inventory section (see _drawPetInventory)
+        // Hero name under portrait
+        this._d(this.add.text(portraitX + portraitSize / 2, portraitY + portraitSize + 10, h.heroName || 'Helten', {
+            fontSize: '13px', color: '#8899bb', fontFamily: 'monospace'
+        }).setOrigin(0.5));
+
+        // Equipment slots (shifted right to leave room for portrait)
         const eqY = panelY - panelH / 2 + 110;
-        this._makeEquipSlot(cx - 120, eqY, 'weapon', 'Våpen');
-        this._makeEquipSlot(cx,       eqY, 'armor',  'Rustning');
-        this._makeQuickUseSlot(cx + 120, eqY);
+        this._makeEquipSlot(contentCX - 120, eqY, 'weapon', 'Våpen');
+        this._makeEquipSlot(contentCX,       eqY, 'armor',  'Rustning');
+        this._makeQuickUseSlot(contentCX + 120, eqY);
 
         // Skills
-        this._drawSkills(cx, panelY - panelH / 2 + 185);
+        this._drawSkills(contentCX, panelY - panelH / 2 + 185);
 
         // Backpack label with count
-        this._d(this.add.text(cx + 80, panelY - panelH / 2 + 220,
+        this._d(this.add.text(contentCX + 80, panelY - panelH / 2 + 220,
             `(${this.inv.itemCount}/10)`, {
-            fontSize: '11px', color: '#334455', fontFamily: 'monospace'
+            fontSize: '13px', color: '#334455', fontFamily: 'monospace'
         }));
 
         // Backpack slots (dynamic size – base 10 + skill expansions)
@@ -133,11 +157,11 @@ class InventoryScene extends Phaser.Scene {
         const cols = 5, gap = 8;
         const slotSize = bpCount > 15 ? 44 : 52;
         const bpTotalW = cols * slotSize + (cols - 1) * gap;
-        const bpStartX = cx - bpTotalW / 2;
+        const bpStartX = contentCX - bpTotalW / 2;
 
         const bpLabel = `RYGGSEKK (${this.inv.itemCount}/${bpCount})`;
-        this._d(this.add.text(cx - panelW / 2 + 20, bpY - 22, bpLabel, {
-            fontSize: '11px', color: '#445566', fontFamily: 'monospace'
+        this._d(this.add.text(contentCX - 220, bpY - 22, bpLabel, {
+            fontSize: '13px', color: '#445566', fontFamily: 'monospace'
         }));
 
         for (let i = 0; i < bpCount; i++) {
@@ -151,7 +175,7 @@ class InventoryScene extends Phaser.Scene {
         if (hasPet) {
             const bpRows = Math.ceil(bpCount / cols);
             const bpBottom = bpY + bpRows * (slotSize + gap);
-            this._drawPetInventory(cx, panelY - panelH / 2, panelW, bpBottom);
+            this._drawPetInventory(contentCX, panelY - panelH / 2, panelW - 220, bpBottom);
         }
     }
 
@@ -184,20 +208,20 @@ class InventoryScene extends Phaser.Scene {
         ));
 
         this._d(this.add.text(x, y + size / 2 + 10, label, {
-            fontSize: '10px', color: '#445566', fontFamily: 'monospace'
+            fontSize: '12px', color: '#445566', fontFamily: 'monospace'
         }).setOrigin(0.5));
 
         if (item) {
             this._drawItemIcon(x, y, item, size - 12);
-            this._d(this.add.text(x, y - size / 2 - 10, item.name, {
-                fontSize: '10px', color: this._rarityTextColor(item), fontFamily: 'monospace'
+            this._d(this.add.text(x, y - size / 2 - 10, this._shortName(item.name), {
+                fontSize: '11px', color: this._rarityTextColor(item), fontFamily: 'monospace'
             }).setOrigin(0.5));
 
             bg.setInteractive({ useHandCursor: true });
             bg.on('pointerdown', (pointer) => {
                 if (pointer.rightButtonDown()) {
                     const dropped = this.inv.dropEquipped(slot, this.hero);
-                    if (dropped) this.gs.itemSpawner.spawnItemAt(this.hero.gridX, this.hero.gridY, dropped);
+                    if (dropped) EventBus.emit('spawnItem', { gx: this.hero.gridX, gy: this.hero.gridY, item: dropped });
                     this._refresh();
                     return;
                 }
@@ -205,7 +229,7 @@ class InventoryScene extends Phaser.Scene {
                 bg._lpTimer = this.time.delayedCall(500, () => {
                     bg._lpTimer = null;
                     const dropped = this.inv.dropEquipped(slot, this.hero);
-                    if (dropped) this.gs.itemSpawner.spawnItemAt(this.hero.gridX, this.hero.gridY, dropped);
+                    if (dropped) EventBus.emit('spawnItem', { gx: this.hero.gridX, gy: this.hero.gridY, item: dropped });
                     this._refresh();
                 });
             });
@@ -224,7 +248,7 @@ class InventoryScene extends Phaser.Scene {
             });
         } else {
             this._d(this.add.text(x, y, 'Tom', {
-                fontSize: '11px', color: '#223344', fontFamily: 'monospace'
+                fontSize: '13px', color: '#223344', fontFamily: 'monospace'
             }).setOrigin(0.5));
         }
     }
@@ -246,28 +270,29 @@ class InventoryScene extends Phaser.Scene {
         ));
 
         this._d(this.add.text(x, y + size / 2 + 10, 'Hurtig (Q)', {
-            fontSize: '10px', color: '#33aa88', fontFamily: 'monospace'
+            fontSize: '12px', color: '#33aa88', fontFamily: 'monospace'
         }).setOrigin(0.5));
 
         if (itemDef) {
             this._drawItemIcon(x, y, itemDef, size - 12);
-            const label = qu.count > 1 ? `${itemDef.name} ×${qu.count}` : itemDef.name;
+            const sn = this._shortName(itemDef.name);
+            const label = qu.count > 1 ? `${sn} ×${qu.count}` : sn;
             this._d(this.add.text(x, y - size / 2 - 10, label, {
-                fontSize: '10px', color: '#ccddff', fontFamily: 'monospace'
+                fontSize: '11px', color: '#ccddff', fontFamily: 'monospace'
             }).setOrigin(0.5));
 
             bg.setInteractive({ useHandCursor: true });
             bg.on('pointerdown', (pointer) => {
                 if (pointer.rightButtonDown()) {
                     const dropped = this.inv.dropQuickUse();
-                    if (dropped) this.gs.itemSpawner.spawnItemAt(this.hero.gridX, this.hero.gridY, dropped);
+                    if (dropped) EventBus.emit('spawnItem', { gx: this.hero.gridX, gy: this.hero.gridY, item: dropped });
                     this._refresh();
                     return;
                 }
                 bg._lpTimer = this.time.delayedCall(500, () => {
                     bg._lpTimer = null;
                     const dropped = this.inv.dropQuickUse();
-                    if (dropped) this.gs.itemSpawner.spawnItemAt(this.hero.gridX, this.hero.gridY, dropped);
+                    if (dropped) EventBus.emit('spawnItem', { gx: this.hero.gridX, gy: this.hero.gridY, item: dropped });
                     this._refresh();
                 });
             });
@@ -287,7 +312,7 @@ class InventoryScene extends Phaser.Scene {
             });
         } else {
             this._d(this.add.text(x, y, 'Tom', {
-                fontSize: '11px', color: '#223344', fontFamily: 'monospace'
+                fontSize: '13px', color: '#223344', fontFamily: 'monospace'
             }).setOrigin(0.5));
         }
     }
@@ -319,13 +344,13 @@ class InventoryScene extends Phaser.Scene {
                 ? '#' + (MINERAL_TIER_COLORS[itemDef.tier] || 0x997755).toString(16).padStart(6, '0')
                 : this._rarityTextColor(itemDef);
             this._d(this.add.text(x, y + size / 2 - 2, this._shortName(itemDef.name), {
-                fontSize: '8px', color: nameCol, fontFamily: 'monospace'
+                fontSize: '11px', color: nameCol, fontFamily: 'monospace'
             }).setOrigin(0.5, 1));
 
             // Stack count badge
             if (count > 1) {
                 this._d(this.add.text(x + size / 2 - 4, y - size / 2 + 2, `${count}`, {
-                    fontSize: '10px', color: '#ffee88', fontFamily: 'monospace', fontStyle: 'bold'
+                    fontSize: '12px', color: '#ffee88', fontFamily: 'monospace', fontStyle: 'bold'
                 }).setOrigin(1, 0));
             }
 
@@ -348,7 +373,7 @@ class InventoryScene extends Phaser.Scene {
                         this.inv.dropSlot(index);
                     } else {
                         const dropped = this.inv.dropSlot(index);
-                        if (dropped) this.gs.itemSpawner.spawnItemAt(this.hero.gridX, this.hero.gridY, dropped);
+                        if (dropped) EventBus.emit('spawnItem', { gx: this.hero.gridX, gy: this.hero.gridY, item: dropped });
                     }
                     this._refresh();
                     return;
@@ -361,7 +386,7 @@ class InventoryScene extends Phaser.Scene {
                         this.inv.dropSlot(index);
                     } else {
                         const dropped = this.inv.dropSlot(index);
-                        if (dropped) this.gs.itemSpawner.spawnItemAt(this.hero.gridX, this.hero.gridY, dropped);
+                        if (dropped) EventBus.emit('spawnItem', { gx: this.hero.gridX, gy: this.hero.gridY, item: dropped });
                     }
                     this._refresh();
                 });
@@ -370,7 +395,7 @@ class InventoryScene extends Phaser.Scene {
                 if (bg._lpTimer) {
                     bg._lpTimer.remove();
                     bg._lpTimer = null;
-                    this.inv.useSlot(index, this.hero, this.gs);
+                    this.inv.useSlot(index, this.hero);
                     this._refresh();
                 }
             });
@@ -386,20 +411,32 @@ class InventoryScene extends Phaser.Scene {
         // Separator
         this._d(this.add.rectangle(cx, baseY - 8, panelW - 40, 1, 0x223344));
 
-        // Pet label with name and HP
+        // Pet portrait (left side, aligned with slots)
+        const petPortSize = 64;
+        const petPortX = cx - panelW / 2 + 14;
+        const petPortY = baseY + 6;
+        const petGfx = this._d(this.add.graphics());
+        petGfx.fillStyle(0x120a18, 0.8);
+        petGfx.fillRoundedRect(petPortX - 3, petPortY - 3, petPortSize + 6, petPortSize + 6, 4);
+        petGfx.lineStyle(1, 0x442244, 0.4);
+        petGfx.strokeRoundedRect(petPortX - 3, petPortY - 3, petPortSize + 6, petPortSize + 6, 4);
+        this._drawPetPortrait(petGfx, petPortX, petPortY, petPortSize, pet);
+
+        // Pet label with name and HP (to the right of portrait)
+        const labelX = petPortX + petPortSize + 12;
         const hpText = `${pet.petName}  HP: ${pet.hp}/${pet.effectiveMaxHp}  ATK: ${pet.effectiveAttack}`;
-        this._d(this.add.text(cx - panelW / 2 + 20, baseY, `KJÆLEDYR  ·  ${hpText}`, {
-            fontSize: '11px', color: '#ffaadd', fontFamily: 'monospace'
+        this._d(this.add.text(labelX, baseY, `KJÆLEDYR  ·  ${hpText}`, {
+            fontSize: '13px', color: '#ffaadd', fontFamily: 'monospace'
         }));
         this._d(this.add.text(cx + panelW / 2 - 20, baseY,
             `(${pet.backpackCount}/4)`, {
-            fontSize: '11px', color: '#334455', fontFamily: 'monospace'
+            fontSize: '13px', color: '#334455', fontFamily: 'monospace'
         }).setOrigin(1, 0));
 
-        // Pet backpack slots (4 slots in a row)
+        // Pet backpack slots (4 slots in a row, to the right of portrait)
         const slotSize = 52, gap = 8;
         const totalW = 4 * slotSize + 3 * gap;
-        const startX = cx - totalW / 2;
+        const startX = labelX;
         const slotsY = baseY + 20;
 
         for (let i = 0; i < 4; i++) {
@@ -432,12 +469,12 @@ class InventoryScene extends Phaser.Scene {
             this._drawItemIcon(x, y, itemDef, size - 10);
             const nameCol = this._rarityTextColor(itemDef);
             this._d(this.add.text(x, y + size / 2 - 2, this._shortName(itemDef.name), {
-                fontSize: '8px', color: nameCol, fontFamily: 'monospace'
+                fontSize: '11px', color: nameCol, fontFamily: 'monospace'
             }).setOrigin(0.5, 1));
 
             if (count > 1) {
                 this._d(this.add.text(x + size / 2 - 4, y - size / 2 + 2, `${count}`, {
-                    fontSize: '10px', color: '#ffee88', fontFamily: 'monospace', fontStyle: 'bold'
+                    fontSize: '12px', color: '#ffee88', fontFamily: 'monospace', fontStyle: 'bold'
                 }).setOrigin(1, 0));
             }
 
@@ -456,14 +493,14 @@ class InventoryScene extends Phaser.Scene {
                 if (pointer.rightButtonDown()) {
                     // Drop from pet backpack to ground
                     const dropped = pet.dropSlot(index);
-                    if (dropped) this.gs.itemSpawner.spawnItemAt(this.hero.gridX, this.hero.gridY, dropped);
+                    if (dropped) EventBus.emit('spawnItem', { gx: this.hero.gridX, gy: this.hero.gridY, item: dropped });
                     this._refresh();
                     return;
                 }
                 bg._lpTimer = this.time.delayedCall(500, () => {
                     bg._lpTimer = null;
                     const dropped = pet.dropSlot(index);
-                    if (dropped) this.gs.itemSpawner.spawnItemAt(this.hero.gridX, this.hero.gridY, dropped);
+                    if (dropped) EventBus.emit('spawnItem', { gx: this.hero.gridX, gy: this.hero.gridY, item: dropped });
                     this._refresh();
                 });
             });
@@ -496,7 +533,7 @@ class InventoryScene extends Phaser.Scene {
         const entries = Object.entries(counts);
         if (entries.length === 0) {
             this._d(this.add.text(cx, y, 'Ingen evner ennå', {
-                fontSize: '11px', color: '#334455', fontFamily: 'monospace'
+                fontSize: '13px', color: '#334455', fontFamily: 'monospace'
             }).setOrigin(0.5));
             return;
         }
@@ -511,155 +548,147 @@ class InventoryScene extends Phaser.Scene {
                 cx - totalW / 2 + 44 + (i % 5) * 90,
                 y + Math.floor(i / 5) * 16,
                 lbl,
-                { fontSize: '10px', fontFamily: 'monospace', color: col }
+                { fontSize: '12px', fontFamily: 'monospace', color: col }
             ));
         });
+    }
+
+    // ── Pet portrait in character frame ──────────────────────────────────────
+
+    _drawPetPortrait(g, px, py, size, pet) {
+        const sc = size / 32;
+        const cx = px + size / 2;
+        const cy = py + size / 2;
+
+        const b = (x, y, w, h, color, alpha) => {
+            if (alpha !== undefined) g.fillStyle(color, alpha);
+            else g.fillStyle(color);
+            g.fillRect(
+                Math.round(px + x * sc), Math.round(py + y * sc),
+                Math.max(1, Math.round(w * sc)), Math.max(1, Math.round(h * sc))
+            );
+        };
+
+        // Shadow
+        g.fillStyle(0x000000, 0.2);
+        g.fillEllipse(cx, py + 28 * sc, 12 * sc, 4 * sc);
+
+        const typeId = pet.typeId || 'fox';
+        const col = pet.color || 0xff8833;
+        const colDk = darkenHex(col, 0.75);
+        const colHi = lightenHex(col, 1.2);
+
+        if (typeId === 'fox') {
+            // Body
+            b(10, 16, 12, 10, col);
+            // Tail
+            g.fillStyle(darkenHex(col, 0.85));
+            g.fillEllipse(px + 24 * sc, py + 20 * sc, 5 * sc, 3 * sc);
+            g.fillStyle(0xffffff);
+            g.fillEllipse(px + 27 * sc, py + 20 * sc, 3 * sc, 2 * sc);
+            // Legs
+            b(11, 24, 3, 5, colDk); b(18, 24, 3, 5, colDk);
+            b(11, 27, 3, 2, 0x331100); b(18, 27, 3, 2, 0x331100);
+            // Head
+            b(10, 8, 12, 10, colHi);
+            // Ears
+            g.fillStyle(darkenHex(col, 0.9));
+            g.fillTriangle(px + 10 * sc, py + 10 * sc, px + 13 * sc, py + 10 * sc, px + 11 * sc, py + 3 * sc);
+            g.fillTriangle(px + 22 * sc, py + 10 * sc, px + 19 * sc, py + 10 * sc, px + 21 * sc, py + 3 * sc);
+            // Snout
+            b(13, 13, 6, 4, 0xffffff);
+            g.fillStyle(0x111111); g.fillCircle(cx, py + 14 * sc, 2 * sc);
+            // Eyes
+            g.fillStyle(0x221100); g.fillCircle(px + 13 * sc, py + 11 * sc, 2 * sc); g.fillCircle(px + 19 * sc, py + 11 * sc, 2 * sc);
+            g.fillStyle(0xffffff); g.fillCircle(px + 12 * sc, py + 10 * sc, 1 * sc); g.fillCircle(px + 18 * sc, py + 10 * sc, 1 * sc);
+        } else if (typeId === 'cat') {
+            b(11, 16, 10, 10, col);
+            // Tail curving up
+            b(20, 14, 3, 8, colDk); b(22, 12, 3, 4, colDk);
+            b(12, 24, 3, 5, colDk); b(17, 24, 3, 5, colDk);
+            b(12, 27, 3, 2, 0x664422); b(17, 27, 3, 2, 0x664422);
+            b(10, 7, 12, 11, colHi);
+            // Ears
+            g.fillStyle(col);
+            g.fillTriangle(px + 10 * sc, py + 9 * sc, px + 13 * sc, py + 9 * sc, px + 11 * sc, py + 2 * sc);
+            g.fillTriangle(px + 22 * sc, py + 9 * sc, px + 19 * sc, py + 9 * sc, px + 21 * sc, py + 2 * sc);
+            // Eyes (green slit)
+            b(12, 10, 3, 3, 0x44cc44); b(17, 10, 3, 3, 0x44cc44);
+            b(13, 10, 1, 3, 0x111111); b(18, 10, 1, 3, 0x111111);
+            // Nose
+            g.fillStyle(0xff8899); g.fillCircle(cx, py + 14 * sc, 1 * sc);
+        } else if (typeId === 'dragon') {
+            b(10, 14, 12, 12, col);
+            b(12, 17, 8, 7, 0xffaa66); // belly
+            // Wings
+            g.fillStyle(colDk);
+            g.fillTriangle(px + 10 * sc, py + 16 * sc, px + 2 * sc, py + 8 * sc, px + 12 * sc, py + 12 * sc);
+            g.fillTriangle(px + 22 * sc, py + 16 * sc, px + 30 * sc, py + 8 * sc, px + 20 * sc, py + 12 * sc);
+            b(11, 24, 3, 5, colDk); b(18, 24, 3, 5, colDk);
+            b(10, 27, 4, 2, darkenHex(col, 0.6)); b(18, 27, 4, 2, darkenHex(col, 0.6));
+            // Head
+            b(10, 5, 12, 10, colHi);
+            // Horns
+            b(10, 4, 2, 4, 0xddaa44); b(20, 4, 2, 4, 0xddaa44);
+            // Eyes
+            g.fillStyle(0xffee00); g.fillCircle(px + 13 * sc, py + 9 * sc, 2 * sc); g.fillCircle(px + 19 * sc, py + 9 * sc, 2 * sc);
+            g.fillStyle(0x111111); g.fillCircle(px + 13 * sc, py + 9 * sc, 1 * sc); g.fillCircle(px + 19 * sc, py + 9 * sc, 1 * sc);
+            // Snout
+            b(14, 12, 4, 3, colHi);
+            g.fillStyle(0x111111); g.fillCircle(px + 14 * sc, py + 13 * sc, 0.5 * sc); g.fillCircle(px + 18 * sc, py + 13 * sc, 0.5 * sc);
+        } else if (typeId === 'owl') {
+            b(10, 14, 12, 10, col);
+            b(11, 24, 3, 4, colDk); b(18, 24, 3, 4, colDk);
+            // Wings folded
+            b(8, 16, 3, 8, colDk); b(21, 16, 3, 8, colDk);
+            // Head (large round)
+            b(9, 5, 14, 12, colHi);
+            // Ear tufts
+            b(9, 4, 3, 4, col); b(20, 4, 3, 4, col);
+            // Face disc
+            b(11, 7, 10, 8, lightenHex(col, 1.15));
+            // Eyes (large)
+            g.fillStyle(0xffee44); g.fillCircle(px + 14 * sc, py + 10 * sc, 3 * sc); g.fillCircle(px + 18 * sc, py + 10 * sc, 3 * sc);
+            g.fillStyle(0x111111); g.fillCircle(px + 14 * sc, py + 10 * sc, 1.5 * sc); g.fillCircle(px + 18 * sc, py + 10 * sc, 1.5 * sc);
+            // Beak
+            g.fillStyle(0xddaa44);
+            g.fillTriangle(px + 15 * sc, py + 13 * sc, px + 17 * sc, py + 13 * sc, px + 16 * sc, py + 16 * sc);
+        }
+
+        // Pet name label
+        const nameStr = pet.petName || '';
+        if (nameStr) {
+            g.fillStyle(0x000000, 0.5);
+            g.fillRoundedRect(px, py + 30 * sc, size, Math.round(10 * sc), 2);
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     _drawItemIcon(x, y, item, size) {
         const g = this._d(this.add.graphics());
-        const s  = size;
-        const hs = s / 2;
-        const col = item.rarityColor || item.color || (
-            item.type === 'weapon' ? 0xff8800
-          : item.type === 'armor'  ? 0x4488ff
-          : 0xff2244);
-        g.fillStyle(col, 0.8);
-
-        // Unique icons per item ID
-        if (item.id === 'dagger') {
-            g.fillRect(x - 1, y - hs + 2, 3, s * 0.5);
-            g.fillStyle(0x886644, 0.9);
-            g.fillRect(x - 4, y + 2, 8, 3);
-            g.fillRect(x - 2, y + 5, 4, 4);
-        } else if (item.id === 'wood_sword' || item.id === 'iron_sword') {
-            g.fillRect(x - 2, y - hs + 2, 4, s * 0.55);
-            g.fillStyle(0x886644, 0.9);
-            g.fillRect(x - 5, y + 4, 10, 3);
-            g.fillRect(x - 2, y + 7, 4, 4);
-        } else if (item.id === 'spear') {
-            g.fillRect(x - 1, y - hs + 1, 3, s * 0.75);
-            g.fillStyle(0xaaaacc, 0.9);
-            g.fillTriangle(x - 4, y - hs + 8, x + 4, y - hs + 8, x, y - hs + 1);
-        } else if (item.id === 'battle_axe') {
-            g.fillStyle(0x886644, 0.9);
-            g.fillRect(x - 1, y - hs + 4, 3, s * 0.65);
-            g.fillStyle(col, 0.9);
-            g.fillTriangle(x - 8, y - hs + 5, x - 1, y - hs + 5, x - 1, y + 2);
-            g.fillTriangle(x + 8, y - hs + 5, x + 1, y - hs + 5, x + 1, y + 2);
-        } else if (item.id === 'war_hammer') {
-            g.fillStyle(0x886644, 0.9);
-            g.fillRect(x - 1, y - 2, 3, s * 0.45);
-            g.fillStyle(col, 0.9);
-            g.fillRoundedRect(x - 7, y - hs + 2, 14, 10, 2);
-        } else if (item.id === 'magic_staff') {
-            g.fillStyle(0x664422, 0.9);
-            g.fillRect(x - 1, y - 2, 3, s * 0.5);
-            g.fillStyle(0xaa44ff, 0.8);
-            g.fillCircle(x, y - hs + 6, 5);
-            g.fillStyle(0xffffff, 0.4);
-            g.fillCircle(x - 1, y - hs + 5, 2);
-        } else if (item.subtype === 'bow') {
-            g.lineStyle(3, col, 0.9);
-            g.beginPath();
-            g.arc(x + 3, y, s / 3, -1.8, 1.8, false);
-            g.strokePath();
-            g.lineStyle(1, 0xccaa66, 0.7);
-            g.lineBetween(x + 3, y - s / 3, x + 3, y + s / 3);
-        } else if (item.id === 'chain_mail') {
-            g.fillStyle(0x8899aa, 0.9);
-            g.fillRoundedRect(x - hs / 2, y - hs / 2, hs, hs * 1.1, 3);
-            for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
-                g.fillStyle(0x667788, 0.5);
-                g.fillCircle(x - hs / 3 + c * (hs / 3), y - hs / 3 + r * (hs / 3), 2);
-            }
-        } else if (item.id === 'plate_armor') {
-            g.fillStyle(0xccccdd, 0.9);
-            g.fillRoundedRect(x - hs / 2, y - hs / 2, hs, hs * 1.1, 3);
-            g.fillStyle(0xaaaacc, 0.5);
-            g.fillRect(x - 1, y - hs / 2 + 2, 2, hs);
-        } else if (item.id === 'dragon_scale') {
-            g.fillStyle(0xff6622, 0.9);
-            g.fillRoundedRect(x - hs / 2, y - hs / 2, hs, hs * 1.1, 3);
-            g.fillStyle(0xcc4411, 0.6);
-            for (let r = 0; r < 2; r++) for (let c = 0; c < 3; c++) {
-                g.fillTriangle(x - 6 + c * 5, y - 4 + r * 7, x - 4 + c * 5, y + r * 7, x - 8 + c * 5, y + r * 7);
-            }
-        } else if (item.type === 'armor') {
-            g.fillRoundedRect(x - hs / 2, y - hs / 2, hs, hs * 1.1, 4);
-        } else if (item.id === 'health_pot' || item.id === 'big_health_pot') {
-            g.fillRoundedRect(x - 5, y - 2, 10, 12, 3);
-            g.fillRect(x - 3, y - 5, 6, 4);
-            g.fillStyle(0xffffff, 0.3);
-            g.fillCircle(x - 2, y + 2, 2);
-        } else if (item.id === 'bomb') {
-            g.fillStyle(0x333333, 0.9);
-            g.fillCircle(x, y + 2, 8);
-            g.fillStyle(0xff6600, 0.8);
-            g.fillRect(x - 1, y - 8, 2, 5);
-            g.fillCircle(x, y - 8, 3);
-        } else if (item.id === 'heart_crystal') {
-            g.fillTriangle(x, y + 8, x - 9, y - 2, x + 9, y - 2);
-            g.fillCircle(x - 5, y - 4, 5);
-            g.fillCircle(x + 5, y - 4, 5);
-        } else if (item.id === 'xp_scroll' || item.id === 'map_scroll') {
-            g.fillRoundedRect(x - 6, y - 6, 12, 16, 2);
-            g.fillCircle(x - 6, y - 6, 3);
-            g.fillCircle(x + 6, y - 6, 3);
-            g.fillCircle(x - 6, y + 10, 3);
-            g.fillCircle(x + 6, y + 10, 3);
-        } else if (item.type === 'consumable') {
-            g.fillRoundedRect(x - 5, y - 2, 10, 12, 3);
-            g.fillRect(x - 3, y - 5, 6, 4);
-            g.fillStyle(0xffffff, 0.3);
-            g.fillCircle(x - 2, y + 2, 2);
-        } else if (item.type === 'weapon') {
-            g.fillRect(x - 2, y - hs + 2, 4, s * 0.55);
-            g.fillRect(x - hs / 2, y, hs, s / 5);
-        } else if (item.type === 'mineral' && item.subtype === 'crystal') {
-            // Crystal gem shape
-            g.fillTriangle(x, y - 8, x - 6, y, x + 6, y);
-            g.fillTriangle(x - 6, y, x + 6, y, x, y + 8);
-            g.fillStyle(0xffffff, 0.4);
-            g.fillTriangle(x, y - 8, x - 3, y - 1, x + 2, y - 1);
-            g.fillStyle(0xffffff, 0.6);
-            g.fillCircle(x - 1, y - 3, 1);
-        } else if (item.type === 'mineral') {
-            // Rocky ore chunk
-            g.fillTriangle(x - 7, y + 5, x + 8, y + 6, x + 2, y - 7);
-            g.fillTriangle(x - 8, y + 5, x + 3, y + 6, x - 4, y - 5);
-            g.fillStyle(0xffffff, 0.2);
-            g.fillTriangle(x - 2, y - 6, x + 4, y - 2, x - 4, y);
-        } else if (item.type === 'fuel' && item.id === 'coal') {
-            g.fillStyle(0x222222, 0.85);
-            g.fillCircle(x - 2, y + 2, 5);
-            g.fillCircle(x + 3, y - 1, 4);
-        } else if (item.type === 'fuel') {
-            // Wood log
-            g.fillRoundedRect(x - 7, y - 3, 14, 6, 2);
-            g.fillStyle(0x664422, 0.7);
-            g.fillCircle(x - 7, y, 3);
-            g.fillCircle(x + 7, y, 3);
-        } else {
-            g.fillCircle(x, y, s / 3.5);
-            g.fillStyle(0xffffff, 0.35);
-            g.fillCircle(x - s / 8, y - s / 8, s / 8);
-        }
+        ItemGraphics.drawInventoryIcon(g, x, y, item, size);
     }
 
     _showTooltip(x, y, item) {
         this._hideTooltip();
+        const { width: W, height: H } = this.cameras.main;
         const rarDef = item.rarity ? RARITY_BY_ID[item.rarity] : null;
         const rarTag = (rarDef && item.rarity !== 'common') ? `[${rarDef.label}]  ` : '';
         const lines = [rarTag + item.name, item.desc || ''];
         const txtCol = this._rarityTextColor(item);
         this._tooltip = this.add.text(x, y, lines.join('\n'), {
-            fontSize: '10px', color: txtCol, fontFamily: 'monospace',
+            fontSize: '12px', color: txtCol, fontFamily: 'monospace',
             backgroundColor: '#0a0918', padding: { x: 6, y: 4 },
-            stroke: '#334466', strokeThickness: 1
+            stroke: '#334466', strokeThickness: 1,
+            wordWrap: { width: 300 }
         }).setOrigin(0.5, 1).setDepth(30);
+
+        // Clamp tooltip within viewport
+        const b = this._tooltip.getBounds();
+        if (b.left < 4) this._tooltip.setX(x + (4 - b.left));
+        if (b.right > W - 4) this._tooltip.setX(x - (b.right - W + 4));
+        if (b.top < 4) this._tooltip.setOrigin(0.5, 0).setY(y + 8);
     }
 
     _hideTooltip() {

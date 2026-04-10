@@ -2,6 +2,7 @@
 //
 //  Usage: Audio.init(); Audio.playAttack(); Audio.startMusic(worldNum);
 //  Settings are persisted to localStorage.
+//  Music data loaded from src/data/musicPieces.js (MUSIC_PIECES, MUSIC_NF).
 
 const Audio = (function () {
 
@@ -17,103 +18,18 @@ const Audio = (function () {
     let musicVol     = 0.35;
     let sfxVol       = 0.70;
 
-    let _seqHandle   = null;  // setTimeout handle for sequencer
-    let _seqStep     = 0;
-    let _seqTheme    = -1;
+    // Multi-voice sequencer state
+    let _seqHandle   = null;   // scheduling pump timeout handle
+    let _seqPieceIdx = -1;     // current piece index
+    let _voiceStates = [];     // per-voice { noteIdx, nextTime }
+    let _activeOscs  = [];     // tracked oscillators for clean stop
 
-    // ── Music themes (note sequences) ────────────────────────────────────────
-    // Notes encoded as semitone offsets from root (root = 110 Hz / A2)
+    const SCHEDULE_AHEAD = 0.25;  // seconds to look ahead
+    const PUMP_INTERVAL  = 80;    // ms between scheduler pumps
+
+    // ── SFX helpers ──────────────────────────────────────────────────────────
     const ROOT = 110;
-    const THEMES = [
-        // 0 – Forest: Grieg's Morning Mood–inspired, ascending pentatonic melody
-        {
-            name:   'Skog',
-            bpm:    72,
-            bass:   [0, -1, 0, 5,  7, -1, 5, 0],
-            melody: [12, 14, 16, 19, 21, 19, 16, 14,  12, -1, 16, 19, 21, 24, 21, -1],
-            counter:[24, -1, -1, -1, 28, -1, -1, -1,  26, -1, -1, -1, 24, -1, -1, -1],
-            chord:  [[0,4,7], [5,9,12], [7,11,14], [0,4,7]],
-            bassWave: 'triangle', melWave: 'triangle', counterWave: 'sine',
-            melVol: 0.11, bassVol: 0.14, chordVol: 0.05, counterVol: 0.06,
-        },
-        // 1 – Cave: Mountain King–inspired, creeping Dorian with building tension
-        {
-            name:   'Grotte',
-            bpm:    62,
-            bass:   [0, 0, 3, 0,  5, 3, 0, -2],
-            melody: [12, -1, 14, 15, 17, -1, 15, 14,  12, -1, 10, 9, 10, 12, 14, -1],
-            counter:[-1, 19, -1, -1, -1, 17, -1, -1,  -1, 15, -1, -1, -1, 14, -1, -1],
-            chord:  [[0,3,7], [3,7,10], [5,8,12], [0,3,7]],
-            bassWave: 'sawtooth', melWave: 'triangle', counterWave: 'sine',
-            melVol: 0.09, bassVol: 0.16, chordVol: 0.04, counterVol: 0.05,
-        },
-        // 2 – Ice: Solveig's Song–inspired, sparse and melancholic Aeolian
-        {
-            name:   'Is',
-            bpm:    54,
-            bass:   [0, -1, 7, -1,  5, -1, 3, -1],
-            melody: [24, -1, 22, 19, 17, -1, 19, -1,  22, 24, 26, -1, 24, -1, 22, -1],
-            counter:[-1, -1, -1, -1, 29, -1, -1, -1,  -1, -1, -1, -1, 31, -1, -1, -1],
-            chord:  [[0,3,7], [-1,-1,-1], [5,8,12], [3,7,10]],
-            bassWave: 'sine', melWave: 'triangle', counterWave: 'sine',
-            melVol: 0.10, bassVol: 0.11, chordVol: 0.04, counterVol: 0.05,
-        },
-        // 3 – Volcanic: Grieg's Phrygian storm, driving rhythm with chromatic tension
-        {
-            name:   'Vulkan',
-            bpm:    92,
-            bass:   [0, 0, -1, 0,  5, 3, 0, -1],
-            melody: [12, 11, 12, 15, 17, 15, 12, 11,  8, -1, 11, 12, 15, 17, 15, -1],
-            counter:[-1, -1, 24, -1, -1, -1, 23, -1,  -1, -1, 20, -1, -1, -1, 24, -1],
-            chord:  [[0,3,7], [0,1,5], [-1,-1,-1], [5,8,12]],
-            bassWave: 'sawtooth', melWave: 'square', counterWave: 'triangle',
-            melVol: 0.07, bassVol: 0.19, chordVol: 0.05, counterVol: 0.04,
-        },
-        // 4 – Temple: Holberg Suite–inspired, stately Baroque pentatonic
-        {
-            name:   'Tempel',
-            bpm:    63,
-            bass:   [0, -1, 7, 5,  3, -1, 5, 0],
-            melody: [19, 17, 15, 12, 15, 17, 19, -1,  21, 19, 17, 15, 17, 19, 21, -1],
-            counter:[12, -1, -1, 7,  -1, -1, 12, -1,  14, -1, -1, 10, -1, -1, 14, -1],
-            chord:  [[0,4,7], [7,11,14], [5,9,12], [0,4,7]],
-            bassWave: 'triangle', melWave: 'sine', counterWave: 'triangle',
-            melVol: 0.10, bassVol: 0.13, chordVol: 0.045, counterVol: 0.06,
-        },
-        // 5 – Deep Magma: Hall of the Mountain King–inspired, relentless and dark
-        {
-            name:   'Dyplag',
-            bpm:    78,
-            bass:   [0, 0, -1, 0,  -3, 0, -5, 0],
-            melody: [12, 14, 15, 17, 18, 17, 15, 14,  12, 10, 8, 7, 8, 10, 12, -1],
-            counter:[-1, -1, -1, -1, 24, -1, -1, -1,  -1, -1, -1, -1, 20, -1, -1, -1],
-            chord:  [[0,3,6], [0,3,7], [-1,-1,-1], [5,8,11]],
-            bassWave: 'sawtooth', melWave: 'square', counterWave: 'sawtooth',
-            melVol: 0.07, bassVol: 0.21, chordVol: 0.04, counterVol: 0.04,
-        },
-        // 6 – Underworld: Grieg's late Romantic mode, whole-tone pads with mournful melody
-        {
-            name:   'Underverden',
-            bpm:    48,
-            bass:   [0, -1, 2, -1,  4, -1, 6, -1],
-            melody: [24, 22, -1, 20, 18, -1, 16, 18,  20, -1, 22, 24, -1, 26, 24, -1],
-            counter:[-1, -1, 12, -1, -1, -1, 10, -1,  -1, -1, 14, -1, -1, -1, 12, -1],
-            chord:  [[0,4,8], [-1,-1,-1], [2,6,10], [4,8,12]],
-            bassWave: 'sine', melWave: 'sine', counterWave: 'triangle',
-            melVol: 0.09, bassVol: 0.14, chordVol: 0.055, counterVol: 0.05,
-        },
-        // 7 – Earth's Core: Grieg's Triumphal March–inspired, Lydian fanfare
-        {
-            name:   'Kjerne',
-            bpm:    72,
-            bass:   [0, 0, 7, 5,  4, 5, 7, 0],
-            melody: [12, -1, 16, 18, 19, 21, 23, 24,  23, 21, 19, 18, 16, -1, 19, -1],
-            counter:[24, -1, -1, -1, 31, -1, 28, -1,  26, -1, -1, -1, 28, -1, -1, -1],
-            chord:  [[0,4,7], [0,4,7], [5,9,12], [7,11,14]],
-            bassWave: 'sawtooth', melWave: 'triangle', counterWave: 'triangle',
-            melVol: 0.11, bassVol: 0.17, chordVol: 0.06, counterVol: 0.06,
-        },
-    ];
+    function _freq(semi) { return ROOT * Math.pow(2, semi / 12); }
 
     // ── Reverb impulse (simple convolver) ────────────────────────────────────
     function _buildReverb(decay = 1.8) {
@@ -132,12 +48,9 @@ const Audio = (function () {
         return conv;
     }
 
-    // ── Semitone to frequency ────────────────────────────────────────────────
-    function _freq(semi) { return ROOT * Math.pow(2, semi / 12); }
-
     // ── Play a short note ────────────────────────────────────────────────────
     function _note(freq, dur, dest, type = 'sine', vol = 0.2, when = 0) {
-        if (!ctx || freq <= 0) return;
+        if (!ctx || freq <= 0) return null;
         const now = ctx.currentTime + when;
         const osc = ctx.createOscillator();
         const env = ctx.createGain();
@@ -151,6 +64,7 @@ const Audio = (function () {
         env.connect(dest);
         osc.start(now);
         osc.stop(now + dur + 0.05);
+        return osc;
     }
 
     // ── Noise burst (for SFX) ────────────────────────────────────────────────
@@ -176,51 +90,49 @@ const Audio = (function () {
         src.stop(now + dur + 0.05);
     }
 
-    // ── Music sequencer ───────────────────────────────────────────────────────
-    function _tick(theme, step) {
-        if (!ctx || !musicEnabled) return;
-        const now = ctx.currentTime;
-        const beatMs = (60 / theme.bpm) * 250;  // 1/16 note in ms
+    // ── Multi-voice music sequencer (look-ahead scheduling) ──────────────────
+    function _schedulePump() {
+        if (!ctx || !musicEnabled || _seqPieceIdx < 0) return;
 
-        // Bass line (each beat = 4 steps, so 4 bass notes per bar)
-        const bIdx    = Math.floor(step / 2) % theme.bass.length;
-        const bassSem = theme.bass[bIdx];
-        if (bassSem >= 0) {
-            _note(_freq(bassSem - 12), 0.28, musicGain, theme.bassWave, theme.bassVol);
-        }
+        const piece   = MUSIC_PIECES[_seqPieceIdx];
+        if (!piece) return;
+        const beatDur = 60 / piece.bpm;
+        const now     = ctx.currentTime;
+        const horizon = now + SCHEDULE_AHEAD;
 
-        // Melody (runs at full 1/16 speed)
-        const mIdx    = step % theme.melody.length;
-        const melSem  = theme.melody[mIdx];
-        if (melSem >= 0) {
-            const dest = reverbNode ? reverbNode : musicGain;
-            _note(_freq(melSem), 0.22, dest, theme.melWave, theme.melVol);
-        }
+        for (let v = 0; v < piece.voices.length; v++) {
+            const voice = piece.voices[v];
+            const state = _voiceStates[v];
+            if (!state) continue;
 
-        // Counter-melody (runs at 1/16 speed, provides harmonic depth)
-        if (theme.counter) {
-            const ctrIdx = step % theme.counter.length;
-            const ctrSem = theme.counter[ctrIdx];
-            if (ctrSem >= 0) {
-                const dest = reverbNode ? reverbNode : musicGain;
-                const wave = theme.counterWave || 'sine';
-                const vol  = theme.counterVol  || 0.05;
-                _note(_freq(ctrSem), 0.30, dest, wave, vol);
-            }
-        }
+            while (state.nextTime < horizon) {
+                const noteObj = voice.notes[state.noteIdx];
+                const noteDur = noteObj.d * beatDur;
 
-        // Chord stabs on beat 1 & 3 of each bar
-        if (step % 8 === 0 || step % 8 === 4) {
-            const cIdx = Math.floor(step / 8) % theme.chord.length;
-            for (const semi of theme.chord[cIdx]) {
-                if (semi >= 0) {
-                    _note(_freq(semi), 0.55, musicGain, 'sine', theme.chordVol);
+                if (noteObj.n !== 'R') {
+                    const freq = MUSIC_NF[noteObj.n];
+                    if (freq) {
+                        // First voice gets reverb, others go direct
+                        const dest = (v === 0 && reverbNode) ? reverbNode : musicGain;
+                        const when = Math.max(0, state.nextTime - now);
+                        const vel  = voice.vol * 0.12 * (0.88 + Math.random() * 0.24);
+                        const osc  = _note(freq, noteDur * 0.9, dest, voice.wave, vel, when);
+                        if (osc) {
+                            _activeOscs.push(osc);
+                            osc.onended = function() {
+                                const idx = _activeOscs.indexOf(osc);
+                                if (idx >= 0) _activeOscs.splice(idx, 1);
+                            };
+                        }
+                    }
                 }
+
+                state.nextTime += noteDur;
+                state.noteIdx  = (state.noteIdx + 1) % voice.notes.length;
             }
         }
 
-        _seqStep    = (step + 1) % (theme.melody.length * 2);
-        _seqHandle  = setTimeout(() => _tick(theme, _seqStep), beatMs);
+        _seqHandle = setTimeout(_schedulePump, PUMP_INTERVAL);
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -261,36 +173,54 @@ const Audio = (function () {
         /** Start themed background music for a given world number */
         startMusic(worldNum) {
             if (!ctx) return;
-            // Map world number to music theme using same logic as visual themes
+            // Map world number to music piece using same logic as visual themes
             let themeIdx;
             if (worldNum <= 7) {
-                // Match visual theme mapping exactly
-                themeIdx = Math.min(Math.floor((worldNum - 1) / 2), THEMES.length - 1);
+                themeIdx = Math.min(Math.floor((worldNum - 1) / 2), MUSIC_PIECES.length - 1);
             } else if (typeof getZone !== 'undefined') {
                 const zone = getZone(worldNum);
-                themeIdx = Math.min(zone.themeIdx, THEMES.length - 1);
+                themeIdx = Math.min(zone.themeIdx, MUSIC_PIECES.length - 1);
             } else {
-                themeIdx = THEMES.length - 1;
+                themeIdx = MUSIC_PIECES.length - 1;
             }
-            // Always restart music on new world (theme may be same but feels fresh)
+            // Always restart music on new world
             this.stopMusic();
-            _seqTheme = themeIdx;
-            _seqStep  = 0;
-            if (musicEnabled) _tick(THEMES[themeIdx], 0);
+            _seqPieceIdx = themeIdx;
+            if (musicEnabled) {
+                const startTime = ctx.currentTime + 0.05;
+                const piece = MUSIC_PIECES[themeIdx];
+                _voiceStates = piece.voices.map(() => ({
+                    noteIdx: 0,
+                    nextTime: startTime
+                }));
+                _schedulePump();
+            }
         },
 
         /** Stop background music */
         stopMusic() {
             if (_seqHandle) { clearTimeout(_seqHandle); _seqHandle = null; }
-            _seqTheme = -1;
+            // Stop any currently playing music notes
+            _activeOscs.forEach(osc => { try { osc.stop(); } catch(_) {} });
+            _activeOscs = [];
+            _voiceStates = [];
+            _seqPieceIdx = -1;
         },
 
         /** Restart after settings change */
         _restartMusic() {
-            const theme = _seqTheme;
+            const pieceIdx = _seqPieceIdx;
             this.stopMusic();
-            _seqTheme = theme;
-            if (musicEnabled && ctx && theme >= 0) _tick(THEMES[theme], 0);
+            _seqPieceIdx = pieceIdx;
+            if (musicEnabled && ctx && pieceIdx >= 0) {
+                const startTime = ctx.currentTime + 0.05;
+                const piece = MUSIC_PIECES[pieceIdx];
+                _voiceStates = piece.voices.map(() => ({
+                    noteIdx: 0,
+                    nextTime: startTime
+                }));
+                _schedulePump();
+            }
         },
 
         // ── SFX ─────────────────────────────────────────────────────────────
@@ -380,7 +310,15 @@ const Audio = (function () {
         setMusicEnabled(v) {
             musicEnabled = !!v;
             if (!musicEnabled) this.stopMusic();
-            else if (_seqTheme >= 0) _tick(THEMES[_seqTheme], _seqStep);
+            else if (_seqPieceIdx >= 0) {
+                const startTime = ctx.currentTime + 0.05;
+                const piece = MUSIC_PIECES[_seqPieceIdx];
+                _voiceStates = piece.voices.map(() => ({
+                    noteIdx: 0,
+                    nextTime: startTime
+                }));
+                _schedulePump();
+            }
             this.saveSettings();
         },
 

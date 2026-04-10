@@ -122,18 +122,24 @@ const SKILL_TREE_PATHS = [
             {
                 id:       'mineral_eye',
                 name:     'Malmøye',
-                desc:     '+1 mineral-\nsynsradius',
+                desc:     '+1 mineral-syn\nIdentifiser mineraler',
                 category: 'GEO',
                 maxStack: 3,
-                apply(hero) { hero.mineralVisionRadius = (hero.mineralVisionRadius || 0) + 1; }
+                apply(hero) {
+                    hero.mineralVisionRadius = (hero.mineralVisionRadius || 0) + 1;
+                    hero.mineralIdentifyLevel = (hero.mineralIdentifyLevel || 0) + 1;
+                }
             },
             {
                 id:       'efficient_mining',
                 name:     'Effektiv utvinning',
-                desc:     '+25% mineral-\nutbytte',
+                desc:     '+25% mineral-utbytte\n+1 ekstra element\nved smelting',
                 category: 'GEO',
                 maxStack: 3,
-                apply(hero) { hero.miningYieldBonus = (hero.miningYieldBonus || 0) + 0.25; }
+                apply(hero) {
+                    hero.miningYieldBonus = (hero.miningYieldBonus || 0) + 0.25;
+                    hero.smeltBonusElement = (hero.smeltBonusElement || 0) + 1;
+                }
             },
             {
                 id:       'master_prospector',
@@ -152,34 +158,38 @@ const SKILL_TREE_PATHS = [
         desc:  'Smelting og legeringer',
         color: 0xff7722,
         icon:  'M',
-        unlockCondition: 'first_smelt',
+        unlockCondition: 'camp_room_found',
         tiers: [
             {
                 id:       'fast_smelting',
                 name:     'Rask smelting',
-                desc:     '-25% smeltetid\nog energikost',
+                desc:     '-25% smeltetid/energi\n+15% sjanse for\nekstra utbytte',
                 category: 'UTIL',
                 maxStack: 3,
                 apply(hero) {
                     hero.smeltingSpeedMul = (hero.smeltingSpeedMul || 1.0) * 0.75;
                     hero.smeltingEfficiency = (hero.smeltingEfficiency || 1.0) * 0.75;
+                    hero.smeltExtraYieldChance = (hero.smeltExtraYieldChance || 0) + 0.15;
                 }
             },
             {
                 id:       'alloy_mastery',
                 name:     'Legeringsmester',
-                desc:     '+15% legering-\nstats per stack',
+                desc:     '+15% legering-stats\n20% sjanse for\ndobbel legering',
                 category: 'UTIL',
                 maxStack: 2,
-                apply(hero) { hero.alloyMasteryBonus = (hero.alloyMasteryBonus || 0) + 0.15; }
+                apply(hero) {
+                    hero.alloyMasteryBonus = (hero.alloyMasteryBonus || 0) + 0.15;
+                    hero.doubleAlloyChance = (hero.doubleAlloyChance || 0) + 0.20;
+                }
             },
             {
                 id:       'master_smith',
                 name:     'Mestersmie',
-                desc:     '+25% stats på\nsmidd utstyr',
+                desc:     '+30% stats på smidd\nutstyr, utstyr får\nspesialegenskaper',
                 category: 'ATK',
                 maxStack: 1,
-                apply(hero) { hero.alloyStatBonus = (hero.alloyStatBonus || 0) + 0.25; }
+                apply(hero) { hero.alloyStatBonus = (hero.alloyStatBonus || 0) + 0.30; }
             },
         ]
     },
@@ -190,7 +200,7 @@ const SKILL_TREE_PATHS = [
         desc:  'Potions, bomber og medisin',
         color: 0x33dd88,
         icon:  'C',
-        unlockCondition: 'first_synthesis',
+        unlockCondition: 'chem_lab_found',
         tiers: [
             {
                 id:       'potent_potions',
@@ -245,8 +255,8 @@ function isSkillUnlocked(hero, pathIndex, tierIndex) {
 
     // Check path-level unlock condition
     if (path.unlockCondition === 'mineral_pickup' && !hero.geologistUnlocked) return false;
-    if (path.unlockCondition === 'first_smelt' && !hero.metallurgistUnlocked) return false;
-    if (path.unlockCondition === 'first_synthesis' && !hero.chemistUnlocked) return false;
+    if (path.unlockCondition === 'camp_room_found' && !hero.metallurgistUnlocked) return false;
+    if (path.unlockCondition === 'chem_lab_found' && !hero.chemistUnlocked) return false;
 
     // Already at max stack → not available
     if (_countSkill(hero, skill.id) >= skill.maxStack) return false;

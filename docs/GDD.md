@@ -1,6 +1,6 @@
 # Labyrint Hero – Game Design Document
-**Versjon:** 0.28
-**Sist oppdatert:** 2026-04-06
+**Versjon:** 0.34
+**Sist oppdatert:** 2026-04-10
 
 ---
 
@@ -23,7 +23,7 @@ Et top-down 2D labyrint-RPG i nettleser. Spilleren navigerer en prosedyre-genere
 - **Rendering:** Phaser Graphics API – prosedyretegnet, ingen bildefiler
 - **Lyd:** Web Audio API – prosedyremusikk og SFX, ingen lydfiler
 - **Lagring:** localStorage via SaveManager
-- **Multi-scene pattern:** GameScene + UIScene parallelt; SkillScene, InventoryScene og SettingsScene som overlays
+- **Multi-scene pattern:** GameScene + UIScene parallelt; SkillScene, InventoryScene og SettingsScene som overlays. UIScene har HUD-knapper for Elementbok, Skilltre og Inventar øverst til høyre
 
 ### Filstruktur
 ```
@@ -34,8 +34,11 @@ src/
   data/skills.js            – 12 passive evner
   data/items.js             – 27 gjenstander (våpen, rustning, forbruk, verktøy) + sjeldenhetsystem
   graphics/CharacterSprite.js – prosedyrekaraktertegning (4 raser, 2 kjønn, 10 frisyrer, 4 klesstiler)
+  graphics/DetailedCharacterSprite.js – høyoppløselig karakterportrett (64-grid) med utstyrsvisning for menyskjermer
+  graphics/SceneBackgrounds.js – tematiske bakgrunner for leirplass og kjemilab
   systems/Inventory.js      – 2 utstyrsplasser + 10-spors ryggsekk
-  systems/AudioManager.js   – prosedyremusikk (5 temaer) + SFX-motoren
+  systems/AudioManager.js   – flerstemt musikk-sekvenser + SFX-motoren
+  data/musicPieces.js       – 8 Grieg-inspirerte flerstemte komposisjoner
   systems/MapRenderer.js    – kartrendering, tåke, portal-animasjon
   systems/ItemSpawner.js    – kister, verktøy, gjenstander, kjøpmann
   systems/MonsterManager.js – monsterplassering, AI, statuseffekter
@@ -112,7 +115,7 @@ Kun ekstra passasje-vegger kan være SECRET/CRACKED/DOOR – DFS-stien er alltid
 - **Forsvar:** Reduserer innkommende skade
 - **Synsfelt:** Tåkeradius (påvirkes av `keen_eye`-evnen)
 - **XP-kurve:** `XP_BASE = 100`, vokser med `XP_GROWTH = 1.55` per nivå → merkbart slakere progresjon
-- **Nivå opp:** Åpner SkillScene (velg én av tre tilfeldige evner). **Ingen automatisk stats-boost** – all styrke kommer fra evner og utstyr.
+- **Nivå opp:** Åpner SkillScene (fullskjerm-panel med 5 kolonner × 3 tier, kort 220×108px). **Ingen automatisk stats-boost** – all styrke kommer fra evner og utstyr.
 - **Facing-retning:** Siste bevegelsesretning brukes av SPACE/F og pilskyting
 
 ### Kjæledyr-følgesvenn
@@ -289,9 +292,9 @@ Livspotte, Stor livspotte, Styrkebrygg (midlertidig +2 ATK i 60 sek), Forsvarsbr
 | T3 | precision | +3 ATK, +3 kjæl.-ATK, +3 kjæl.-HP, +2 hjerter nå | ×1 |
 
 ### Håndverksstier (låses opp)
-- **Geolog** (lås: finn mineral) – mineralsynsradius, utbytte, garantert sjeldent mineral
-- **Metallurg** (lås: smelt mineral) – smeltetid, legeringsstats, mestersmie
-- **Kjemiker** (lås: lag kjemikalie) – potion-varighet, bombeskade, eksplosjonsradius
+- **Geolog** (lås: finn mineral) – mineralidentifisering, mineralsynsradius, utbytte, bonuselementer, garantert sjeldent mineral. **Kreves for å se mineraler på kartet.**
+- **Metallurg** (lås: finn leirplass) – smeltetid/energi, ekstra utbytte, legeringsstats, dobbellegering, mestersmie med spesialegenskaper. **Kreves for smelting, legering og smiing.**
+- **Kjemiker** (lås: finn kjemisk lab) – potion-varighet, bombeskade, eksplosjonsradius. **Kreves for å lage kjemikalier.**
 
 ### Synergier
 Aktiveres automatisk når helten har evner fra begge stier i et par:
@@ -311,7 +314,7 @@ Aktiveres automatisk når helten har evner fra begge stier i et par:
 
 ## 8. Lyd
 
-- **Bakgrunnsmusikk:** 8 prosedyre-temaer (Web Audio API) inspirert av Edvard Grieg, med melodi, bass, akkorder og kontramellodi. Skifter med verden/sone
+- **Bakgrunnsmusikk:** 8 flerstemte komposisjoner (Web Audio API) inspirert av Edvard Grieg. Hvert stykke har 3-5 uavhengige stemmer med individuelle notelengder, bølgeformer og volum. Look-ahead scheduling for presis synkronisering. Subtil velocity-variasjon for humanisering. Skifter med verden/sone. Stykker: Morgenstemning (skog), Dovregubbens hall (grotte), Solveigs vuggevise (is), Trollenes marsj (vulkan), Holberg Suite (tempel), Peer Gynts hjemkomst (dyplag), Åses død (underverden), Triumfmarsj (kjerne)
 - **SFX:** angrep, pilskudd, skade, plukk opp, nivå-opp, død, døroppning, veggskjøting, exit-portal
 - **Innstillinger:** ⚙-knapp i HUD åpner SettingsScene med volum-slidere og on/off-toggle
 
@@ -351,7 +354,7 @@ Aktiveres automatisk når helten har evner fra begge stier i et par:
 | Tile-typer (6 typer inkl. TRAP) | ✅ Ferdig | SECRET, CRACKED_WALL, DOOR, TRAP |
 | Fog of War | ✅ Ferdig | 3 nivåer |
 | Visuelle verdenstemaer | ✅ Ferdig | 5 temaer med detaljerte per-tile dekorasjoner, murverk, vegg-skygger |
-| Karakterskaper (4 raser) | ✅ Ferdig | Alv, Dverg, Menneske, Hobbit; kjønnsvalg |
+| Karakterskaper (4 raser) | ✅ Ferdig | Tre-kolonne layout: 2×2 rase-rutenett + stats | preview + navn | utseende. Fyller hele skjermen |
 | Prosedyrekaraktergrafikk | ✅ Ferdig | 2 kjønn, 10 frisyrer, 4 klesstiler, øynefarge, skjegg, tilbehør per rase |
 | Vanskelighetsgrad (MenuScene) | ✅ Ferdig | LETT/NORMAL/VANSKELIG – prominent i startmenyen |
 | Startbonus-valg | ✅ Ferdig | +Hjerte / +Angrep / +Syn |
@@ -368,12 +371,13 @@ Aktiveres automatisk når helten har evner fra begge stier i et par:
 | Skilltre (5 stier + synergier) | ✅ Ferdig | Kriger / Villmarksjeger + Geolog / Metallurg / Kjemiker + 9 synergier. T-tast for visning |
 | Unike gjenstandsikoner | ✅ Ferdig | 20+ distinkte prosedyregrafikker |
 | Bevegelsesanimasjon (glide) | ✅ Ferdig | 90ms hero, 126ms monster |
-| Zoom (kamera) | ✅ Ferdig | Muskjul og +/− |
+| Zoom (kamera) | ✅ Ferdig | Mushjul, +/−, touch-knapper |
+| Fullskjerm (touch) | ✅ Ferdig | Fullscreen API via touch-knapp |
 | HUD + UIScene | ✅ Ferdig | |
 | Minimap (M-tast) | ✅ Ferdig | Fog-bevisst, hjørne-kart |
 | Statuseffekter (4 typer) | ✅ Ferdig | Gift, Brann, Frostbitt, Lammet |
 | Feller/traps | ✅ Ferdig | Usynlige spikefeller, 1-gangs-trigger |
-| Bakgrunnsmusikk (8 temaer) | ✅ Ferdig | Web Audio API, Grieg-inspirert med kontramellodi |
+| Bakgrunnsmusikk (8 stykker) | ✅ Ferdig | Web Audio API, Grieg-inspirert. Flerstemt polyfoni (3-5 stemmer), look-ahead scheduling, velocity-variasjon |
 | SFX (9 typer) | ✅ Ferdig | |
 | Lydinnstillinger | ✅ Ferdig | SettingsScene |
 | SaveManager (localStorage) | ✅ Ferdig | |
@@ -455,12 +459,14 @@ Elements-modifikasjonen fletter det periodiske system, geologi, metallurgi og kj
 Periodisk system-overlay med 18×9 rutenett. Oppdagede grunnstoffer vises med symbol og kategori-farge. Gruppeprestasjoner (f.eks. Jernmetaller → +2 HP) vises nederst.
 
 ### Geolog-skillsti (#6)
-Låses opp ved første mineral-funn. 3 tiers:
+Låses opp ved første mineral-funn. Kreves for å se mineraler på kartet og for mineral-identifisering. 3 tiers:
 | Tier | Skill | Effekt |
 |------|-------|--------|
-| T1 | Malmøye | +1 mineral-synsradius per stack (maks 3) |
-| T2 | Effektiv utvinning | +25% mineralutbytte per stack (maks 3) |
+| T1 | Malmøye | +1 mineral-synsradius, mineral-identifisering per stack (maks 3) |
+| T2 | Effektiv utvinning | +25% mineralutbytte, +1 ekstra element ved smelting per stack (maks 3) |
 | T3 | Mesterprospektør | Garantert T4+ mineral per etasje (maks 1) |
+
+**Mineral-synlighet:** Uten Geolog-skill er mineraler usynlige på kartet. Helten kan fortsatt plukke opp mineraler ved å gå over dem (blindt opptak). Malmøye-skillen gjør mineraler synlige og gir mineral-identifisering. Uten identifisering vises mineraler som «Ukjent mineral» og grunnstoffer oppdages ikke automatisk.
 
 Synergi: **Jordens kraft** (Geolog + Vokter) → +1 forsvar, +1 mineralsynsradius.
 
@@ -468,7 +474,7 @@ Synergi: **Jordens kraft** (Geolog + Vokter) → +1 forsvar, +1 mineralsynsradiu
 
 Smelting, legeringer og smiing av utstyr.
 
-**Leirplass (Camp Room):** Garantert fra verden 2+, 50% sjanse i verden 1. Trygg sone med smelteovn og **persistent lager (stash)** der spilleren kan lagre mineraler, brensel og andre ressurser mellom besøk. Frigjør ryggsekken for kamp. Åpnes med V-tast.
+**Leirplass (Camp Room):** Garantert fra verden 2+, 50% sjanse i verden 1. Trygg sone med smelteovn og **persistent lager (stash)** der spilleren kan lagre mineraler, brensel og andre ressurser mellom besøk. Frigjør ryggsekken for kamp. Åpnes med V-tast. Visuelt tema med bål, telt, trær, stjernehimmel og røyk. Karakterportrett i nedre høyre hjørne.
 
 **Smelting:** Mineraler + brensel → rene grunnstoffer. Brensel (tre=1, kull=3 energi) spawner i labyrinten.
 
@@ -477,21 +483,23 @@ Smelting, legeringer og smiing av utstyr.
 **Smiing:** 12 nye våpen/rustninger fra legeringer. Stats overgår vanlig utstyr.
 
 **Metallurg-skillsti (#8):**
+Låses opp ved første besøk i leirplass. **Minst én Metallurg-skill kreves for å bruke smelting, legering og smiing.** Lager-fanen er alltid tilgjengelig.
 | Tier | Skill | Effekt |
 |------|-------|--------|
-| T1 | Rask smelting | -25% energi og smeltetid per stack (maks 3) |
-| T2 | Legeringsmester | +15% legering-stats per stack (maks 2) |
-| T3 | Mestersmie | +25% stats på smidd utstyr (maks 1) |
+| T1 | Rask smelting | -25% energi/smeltetid, +15% sjanse ekstra utbytte per stack (maks 3) |
+| T2 | Legeringsmester | +15% legering-stats, 20% sjanse for dobbel legering per stack (maks 2) |
+| T3 | Mestersmie | +30% stats på smidd utstyr, spesialegenskaper (våpen: +10% krit, rustning: +1 torneskade) (maks 1) |
 
 ### Fase 3: Kjemi (v0.25)
 
 Kjemisk syntese av potions, bomber, medisiner og syrer fra rene grunnstoffer.
 
-**Kjemisk laboratorium:** Spesialrom fra verden 3+ med grønn glød. Åpnes med C-tast. Filterbare oppskrifter etter kategori.
+**Kjemisk laboratorium:** Spesialrom fra verden 3+ med grønn glød. Åpnes med C-tast. Filterbare oppskrifter etter kategori. Visuelt tema med labbenk, hyller med flasker, erlenmeyerkolber, reagensrør, periodisk tabell-hint og bobler. Karakterportrett i nedre høyre hjørne.
 
 **Produkter:** 15 kjemiske produkter i 5 kategorier. Kraftigere enn vanlige consumables – kjemisk livselixir healer 4 HP (vs 2), krutt gjør 8 skade i radius 3 (vs 6 for vanlig bombe), dynamitt 15 skade.
 
 **Kjemiker-skillsti (#9):**
+Låses opp ved første besøk i kjemisk laboratorium. **Minst én Kjemiker-skill kreves for å lage kjemikalier.**
 | Tier | Skill | Effekt |
 |------|-------|--------|
 | T1 | Potente potions | +50% potion-varighet per stack (maks 3) |

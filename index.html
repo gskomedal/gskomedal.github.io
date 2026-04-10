@@ -15,7 +15,7 @@
             overflow: hidden;
             font-family: monospace;
         }
-        canvas { display: block; image-rendering: pixelated; }
+        canvas { display: block; }
     </style>
 </head>
 <body>
@@ -28,6 +28,8 @@
 <script src="src/maze.js"></script>
 <script src="src/utils/SaveManager.js"></script>
 <script src="src/utils/Leaderboard.js"></script>
+<script src="src/utils/UIHelper.js"></script>
+<script src="src/utils/EventBus.js"></script>
 
 <!-- Data -->
 <script src="src/data/skills.js"></script>
@@ -36,9 +38,14 @@
 <script src="src/data/alloys.js"></script>
 <script src="src/data/molecules.js"></script>
 <script src="src/data/items.js"></script>
+<script src="src/data/musicPieces.js"></script>
 
 <!-- Graphics -->
 <script src="src/graphics/CharacterSprite.js"></script>
+<script src="src/graphics/DetailedCharacterSprite.js"></script>
+<script src="src/graphics/SceneBackgrounds.js"></script>
+<script src="src/graphics/ItemGraphics.js"></script>
+<script src="src/graphics/MonsterGraphics.js"></script>
 
 <!-- Systems -->
 <script src="src/systems/ElementTracker.js"></script>
@@ -54,6 +61,7 @@
 <script src="src/systems/InputHandler.js"></script>
 
 <!-- Entities -->
+<script src="src/entities/HeroCrafting.js"></script>
 <script src="src/entities/Hero.js"></script>
 <script src="src/entities/Monster.js"></script>
 <script src="src/entities/Pet.js"></script>

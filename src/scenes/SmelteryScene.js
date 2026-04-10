@@ -8,7 +8,6 @@ class SmelteryScene extends Phaser.Scene {
 
     init(data) {
         this.heroRef = data.heroRef || null;
-        this.gs = data.gameScene || null;
     }
 
     create() {
@@ -27,9 +26,38 @@ class SmelteryScene extends Phaser.Scene {
         this.px = cx - this.panelW / 2;
         this.py = cy - this.panelH / 2;
 
+        // ── Camp background art (behind everything) ──────────────────────────
         const panel = this.add.graphics();
-        panel.fillStyle(0x0a0818, 0.97);
+        panel.fillStyle(0x0a0608, 0.97);
         panel.fillRoundedRect(this.px, this.py, this.panelW, this.panelH, 8);
+        if (SceneBackgrounds.addCampBackground) {
+            SceneBackgrounds.addCampBackground(this, this.px, this.py, this.panelW, this.panelH);
+        }
+
+        // ── Character portrait (sits in the scene, lower-right of bg) ─────────
+        const portraitSize = 120;
+        const portraitX = this.px + this.panelW - portraitSize - 6;
+        const portraitY = this.py + this.panelH - portraitSize - 6;
+        const portraitGfx = this.add.graphics();
+        if (this.heroRef) {
+            const eq = this.heroRef.inventory ? this.heroRef.inventory.equipped : {};
+            if (typeof drawDetailedCharacterSprite === 'function') {
+                drawDetailedCharacterSprite(portraitGfx, portraitX, portraitY, portraitSize, this.heroRef.appearance, this.heroRef.race, eq);
+            } else {
+                drawCharacterSprite(portraitGfx, portraitX, portraitY, portraitSize, this.heroRef.appearance, this.heroRef.race);
+            }
+        }
+
+        // ── Dark content area (high contrast zone for UI) ─────────────────────
+        const contentLeft = this.px + 6;
+        const contentTop = this.py + 6;
+        const contentW = this.panelW - 12;
+        const contentH = 60;
+        const uiGfx = this.add.graphics();
+        uiGfx.fillStyle(0x0a0608, 0.82);
+        uiGfx.fillRoundedRect(contentLeft, contentTop, contentW, contentH, 6);
+
+        // Panel border
         panel.lineStyle(2, 0xff7722);
         panel.strokeRoundedRect(this.px, this.py, this.panelW, this.panelH, 8);
 
@@ -41,14 +69,14 @@ class SmelteryScene extends Phaser.Scene {
         // Fuel indicator
         const fuel = this.smelter.calculateFuelEnergy(this.heroRef);
         this._fuelText = this.add.text(this.px + this.panelW - 20, this.py + 18, `Brensel: ${fuel} energi`, {
-            fontSize: '10px', color: '#886633', fontFamily: 'monospace'
+            fontSize: '12px', color: '#886633', fontFamily: 'monospace'
         }).setOrigin(1, 0.5);
 
         // Element counts summary
         const tracker = this.heroRef.elementTracker;
         const elemCount = Object.keys(tracker.collected).length;
         this._elemText = this.add.text(this.px + 20, this.py + 18, `Grunnstoffer: ${elemCount}`, {
-            fontSize: '10px', color: '#887766', fontFamily: 'monospace'
+            fontSize: '12px', color: '#887766', fontFamily: 'monospace'
         }).setOrigin(0, 0.5);
 
         this.add.rectangle(cx, this.py + 34, this.panelW - 20, 1, 0x332200);
@@ -67,7 +95,7 @@ class SmelteryScene extends Phaser.Scene {
             const tx = this.px + 30 + i * (tabW + 10) + tabW / 2;
             const active = this._tab === tab.id;
             const btn = this.add.text(tx, tabY, tab.label, {
-                fontSize: '11px', color: active ? '#ff7722' : '#554433',
+                fontSize: '13px', color: active ? '#ff7722' : '#554433',
                 fontFamily: 'monospace', fontStyle: active ? 'bold' : 'normal'
             }).setOrigin(0.5).setInteractive({ useHandCursor: true });
             btn.on('pointerdown', () => { this._tab = tab.id; this._refresh(); });
@@ -91,15 +119,15 @@ class SmelteryScene extends Phaser.Scene {
     }
 
     _refresh() {
-        for (const o of this._dyn) { if (o && o.destroy) o.destroy(); }
-        this._dyn = [];
+        UIHelper.clearDynamic(this._dyn);
+
+        // Dark backing behind content for readability
+        const cbg = this._d(this.add.graphics());
+        cbg.fillStyle(0x0a0608, 0.78);
+        cbg.fillRoundedRect(this.px + 6, this.contentY - 4, this.panelW - 150, this.panelH - (this.contentY - this.py) - 10, 4);
 
         // Update tab button colors
-        const tabs = ['stash', 'smelt', 'alloy', 'forge'];
-        this._tabBtns.forEach((btn, i) => {
-            btn.setColor(this._tab === tabs[i] ? '#ff7722' : '#554433');
-            btn.setFontStyle(this._tab === tabs[i] ? 'bold' : 'normal');
-        });
+        UIHelper.updateTabButtons(this._tabBtns, ['stash', 'smelt', 'alloy', 'forge'], this._tab, '#ff7722', '#554433');
 
         // Update fuel text
         const fuel = this.smelter.calculateFuelEnergy(this.heroRef);
@@ -111,10 +139,36 @@ class SmelteryScene extends Phaser.Scene {
 
         switch (this._tab) {
             case 'stash': this._drawStashTab(); break;
-            case 'smelt': this._drawSmeltTab(); break;
-            case 'alloy': this._drawAlloyTab(); break;
-            case 'forge': this._drawForgeTab(); break;
+            case 'smelt':
+            case 'alloy':
+            case 'forge':
+                if (this._hasMetallurgSkill()) {
+                    if (this._tab === 'smelt') this._drawSmeltTab();
+                    else if (this._tab === 'alloy') this._drawAlloyTab();
+                    else this._drawForgeTab();
+                } else {
+                    this._drawLockedTab();
+                }
+                break;
         }
+    }
+
+    _hasMetallurgSkill() {
+        return (this.heroRef.skills || []).some(s =>
+            s === 'fast_smelting' || s === 'alloy_mastery' || s === 'master_smith'
+        );
+    }
+
+    _drawLockedTab() {
+        const cx = this.px + this.panelW / 2;
+        const cy = this.contentY + (this.panelH - (this.contentY - this.py)) / 2 - 40;
+        this._d(this.add.text(cx, cy, '🔒', { fontSize: '32px' }).setOrigin(0.5));
+        this._d(this.add.text(cx, cy + 30, 'Krever Metallurg-skill!', {
+            fontSize: '14px', color: '#ff7722', fontFamily: 'monospace', fontStyle: 'bold'
+        }).setOrigin(0.5));
+        this._d(this.add.text(cx, cy + 50, 'Lær Rask smelting i skilltreet\nfor å bruke smelteovnen.', {
+            fontSize: '12px', color: '#665544', fontFamily: 'monospace', align: 'center'
+        }).setOrigin(0.5));
     }
 
     _d(obj) { this._dyn.push(obj); return obj; }
@@ -131,7 +185,7 @@ class SmelteryScene extends Phaser.Scene {
 
         // ── Left side: Backpack (deposit from) ──────────────────────────────
         this._d(this.add.text(leftX, y, 'RYGGSEKK → Lager', {
-            fontSize: '10px', color: '#887766', fontFamily: 'monospace', fontStyle: 'bold'
+            fontSize: '12px', color: '#887766', fontFamily: 'monospace', fontStyle: 'bold'
         }));
         y += 16;
 
@@ -151,7 +205,7 @@ class SmelteryScene extends Phaser.Scene {
             const hexCol = '#' + col.toString(16).padStart(6, '0');
 
             this._d(this.add.text(leftX + 4, bpY, `${def.name} ×${entry.count}`, {
-                fontSize: '10px', color: hexCol, fontFamily: 'monospace'
+                fontSize: '12px', color: hexCol, fontFamily: 'monospace'
             }));
 
             const btn = this._d(this.add.text(leftX + colW - 10, bpY, '→', {
@@ -165,20 +219,20 @@ class SmelteryScene extends Phaser.Scene {
         }
         if (!hasDepositable) {
             this._d(this.add.text(leftX + 4, bpY, 'Ingen mineraler/brensel', {
-                fontSize: '9px', color: '#444433', fontFamily: 'monospace'
+                fontSize: '13px', color: '#444433', fontFamily: 'monospace'
             }));
         }
 
         // ── Right side: Stash (withdraw from) ──────────────────────────────
         let sY = this.contentY;
         this._d(this.add.text(rightX, sY, 'LAGER → Ryggsekk', {
-            fontSize: '10px', color: '#887766', fontFamily: 'monospace', fontStyle: 'bold'
+            fontSize: '12px', color: '#887766', fontFamily: 'monospace', fontStyle: 'bold'
         }));
         sY += 16;
 
         if (hero.campStash.length === 0) {
             this._d(this.add.text(rightX + 4, sY, 'Lageret er tomt.', {
-                fontSize: '9px', color: '#444433', fontFamily: 'monospace'
+                fontSize: '13px', color: '#444433', fontFamily: 'monospace'
             }));
         } else {
             for (let si = 0; si < hero.campStash.length; si++) {
@@ -192,7 +246,7 @@ class SmelteryScene extends Phaser.Scene {
                 const hexCol = '#' + col.toString(16).padStart(6, '0');
 
                 this._d(this.add.text(rightX + 4, sY, `${name} ×${stashEntry.count}`, {
-                    fontSize: '10px', color: hexCol, fontFamily: 'monospace'
+                    fontSize: '12px', color: hexCol, fontFamily: 'monospace'
                 }));
 
                 const btn = this._d(this.add.text(rightX + colW - 10, sY, '←', {
@@ -209,7 +263,7 @@ class SmelteryScene extends Phaser.Scene {
         // Stash capacity label
         const totalStashed = hero.campStash.reduce((s, e) => s + (e.count || 0), 0);
         this._d(this.add.text(cx, this.py + this.panelH - 30, `Lagret: ${totalStashed} gjenstander  |  Klikk → for å lagre, ← for å hente`, {
-            fontSize: '9px', color: '#665544', fontFamily: 'monospace'
+            fontSize: '13px', color: '#665544', fontFamily: 'monospace'
         }).setOrigin(0.5));
     }
 
@@ -271,7 +325,7 @@ class SmelteryScene extends Phaser.Scene {
         let y = this.contentY;
 
         this._d(this.add.text(cx, y, 'Velg et mineral å smelte (ryggsekk + lager):', {
-            fontSize: '10px', color: '#887766', fontFamily: 'monospace'
+            fontSize: '12px', color: '#887766', fontFamily: 'monospace'
         }).setOrigin(0.5));
         y += 18;
 
@@ -298,7 +352,7 @@ class SmelteryScene extends Phaser.Scene {
 
         if (minerals.length === 0) {
             this._d(this.add.text(cx, y + 30, 'Ingen mineraler i ryggsekk eller lager.', {
-                fontSize: '11px', color: '#444433', fontFamily: 'monospace'
+                fontSize: '13px', color: '#444433', fontFamily: 'monospace'
             }).setOrigin(0.5));
             return;
         }
@@ -324,21 +378,22 @@ class SmelteryScene extends Phaser.Scene {
             // Source label
             const srcLabel = m.source === 'stash' ? ' [lager]' : '';
 
-            // Mineral name + count
-            this._d(this.add.text(startX + 8, my + 6, `${m.def.name} (×${m.count})${srcLabel}`, {
-                fontSize: '11px', color: hexCol, fontFamily: 'monospace', fontStyle: 'bold'
+            // Mineral name + count – truncate to fit slot
+            const mName = m.def.name.length > 22 ? m.def.name.slice(0, 21) + '…' : m.def.name;
+            this._d(this.add.text(startX + 8, my + 6, `${mName} (×${m.count})${srcLabel}`, {
+                fontSize: '13px', color: hexCol, fontFamily: 'monospace', fontStyle: 'bold'
             }));
 
             // Yield preview
             const yieldStr = m.def.yields.map(y => `${y.symbol}×${y.amount}`).join(', ');
             this._d(this.add.text(startX + 8, my + 22, `→ ${yieldStr}  |  Energi: ${check.energyCost}`, {
-                fontSize: '9px', color: '#776655', fontFamily: 'monospace'
+                fontSize: '13px', color: '#776655', fontFamily: 'monospace'
             }));
 
             // Smelt button
             if (check.canSmelt) {
                 const btn = this._d(this.add.text(startX + colW - 60, my + 12, '[ Smelt ]', {
-                    fontSize: '11px', color: '#ff7722', fontFamily: 'monospace', fontStyle: 'bold'
+                    fontSize: '13px', color: '#ff7722', fontFamily: 'monospace', fontStyle: 'bold'
                 }).setInteractive({ useHandCursor: true }));
                 btn.on('pointerover', () => btn.setColor('#ffaa44'));
                 btn.on('pointerout', () => btn.setColor('#ff7722'));
@@ -349,7 +404,7 @@ class SmelteryScene extends Phaser.Scene {
                 }
             } else {
                 this._d(this.add.text(startX + colW - 70, my + 12, 'Lite brensel', {
-                    fontSize: '9px', color: '#443322', fontFamily: 'monospace'
+                    fontSize: '13px', color: '#443322', fontFamily: 'monospace'
                 }));
             }
         });
@@ -360,71 +415,39 @@ class SmelteryScene extends Phaser.Scene {
     }
 
     _doSmelt(slotIndex, mineralDef) {
-        const hero = this.heroRef;
-        const result = this.smelter.smelt(mineralDef, hero);
-
-        // Consume fuel
-        this.smelter.consumeFuel(hero, result.energyCost);
-
-        // Unlock metallurgist path on first smelt
-        if (!hero.metallurgistUnlocked) {
-            hero.metallurgistUnlocked = true;
-            if (this.gs) {
-                this.gs._floatingText(hero.gridX, hero.gridY - 1, 'Metallurg-stien er ulåst!', '#ff7722');
-            }
-        }
-
-        // Remove one mineral from slot
-        const entry = hero.inventory.backpack[slotIndex];
-        if (entry) {
-            entry.count--;
-            if (entry.count <= 0) hero.inventory.backpack[slotIndex] = null;
-        }
-
-        // Show result
-        const elemStr = result.elements.map(e => `${e.symbol}×${e.amount}`).join(', ');
-        if (this.gs) {
-            this.gs._floatingText(hero.gridX, hero.gridY, `Smeltet: ${elemStr}`, '#ff7722');
-        }
-
-        // Check completions
-        hero.elementTracker.checkCompletions();
-
-        Audio.playPickup();
-        this._refresh();
+        this._doSmeltFrom('backpack', slotIndex, mineralDef);
     }
 
     _doSmeltFromStash(stashIndex, mineralDef) {
+        this._doSmeltFrom('stash', stashIndex, mineralDef);
+    }
+
+    /** Shared smelt logic for both backpack and stash sources. */
+    _doSmeltFrom(source, index, mineralDef) {
         const hero = this.heroRef;
         const result = this.smelter.smelt(mineralDef, hero);
 
-        // Consume fuel
         this.smelter.consumeFuel(hero, result.energyCost);
 
-        // Unlock metallurgist path on first smelt
-        if (!hero.metallurgistUnlocked) {
-            hero.metallurgistUnlocked = true;
-            if (this.gs) {
-                this.gs._floatingText(hero.gridX, hero.gridY - 1, 'Metallurg-stien er ulåst!', '#ff7722');
+        // Remove one mineral from source
+        if (source === 'stash') {
+            const stashEntry = hero.campStash[index];
+            if (stashEntry) {
+                stashEntry.count--;
+                if (stashEntry.count <= 0) hero.campStash.splice(index, 1);
+            }
+        } else {
+            const entry = hero.inventory.backpack[index];
+            if (entry) {
+                entry.count--;
+                if (entry.count <= 0) hero.inventory.backpack[index] = null;
             }
         }
 
-        // Remove one mineral from stash
-        const stashEntry = hero.campStash[stashIndex];
-        if (stashEntry) {
-            stashEntry.count--;
-            if (stashEntry.count <= 0) hero.campStash.splice(stashIndex, 1);
-        }
-
-        // Show result
         const elemStr = result.elements.map(e => `${e.symbol}×${e.amount}`).join(', ');
-        if (this.gs) {
-            this.gs._floatingText(hero.gridX, hero.gridY, `Smeltet: ${elemStr}`, '#ff7722');
-        }
+        EventBus.emit('floatingText', { gx: hero.gridX, gy: hero.gridY, msg: `Smeltet: ${elemStr}`, color: '#ff7722' });
 
-        // Check completions
         hero.elementTracker.checkCompletions();
-
         Audio.playPickup();
         this._refresh();
     }
@@ -437,7 +460,7 @@ class SmelteryScene extends Phaser.Scene {
         let y = this.contentY;
 
         this._d(this.add.text(cx, y, 'Kombiner grunnstoffer til legeringer:', {
-            fontSize: '10px', color: '#887766', fontFamily: 'monospace'
+            fontSize: '12px', color: '#887766', fontFamily: 'monospace'
         }).setOrigin(0.5));
         y += 18;
 
@@ -448,7 +471,7 @@ class SmelteryScene extends Phaser.Scene {
 
         if (alloys.length === 0) {
             this._d(this.add.text(cx, y + 30, 'Ingen legeringer tilgjengelig.', {
-                fontSize: '11px', color: '#444433', fontFamily: 'monospace'
+                fontSize: '13px', color: '#444433', fontFamily: 'monospace'
             }).setOrigin(0.5));
             return;
         }
@@ -468,7 +491,7 @@ class SmelteryScene extends Phaser.Scene {
 
             // Alloy name + formula
             this._d(this.add.text(startX + 8, ay + 6, `${a.name} (${a.formula})`, {
-                fontSize: '11px', color: hexCol, fontFamily: 'monospace', fontStyle: 'bold'
+                fontSize: '13px', color: hexCol, fontFamily: 'monospace', fontStyle: 'bold'
             }));
 
             // Recipe
@@ -478,19 +501,19 @@ class SmelteryScene extends Phaser.Scene {
                 return `${r.symbol}: ${have}/${r.amount}${ok ? '' : '!'}`;
             }).join('  ');
             this._d(this.add.text(startX + 8, ay + 22, recipeStr, {
-                fontSize: '9px', color: '#776655', fontFamily: 'monospace'
+                fontSize: '13px', color: '#776655', fontFamily: 'monospace'
             }));
 
             // Stats preview
             const stats = a.statBonuses;
             const statStr = Object.entries(stats).map(([k, v]) => `+${v} ${k}`).join(', ');
             this._d(this.add.text(startX + 8, ay + 34, `Stats: ${statStr}  |  Energi: ${entry.energyCost}`, {
-                fontSize: '8px', color: '#665544', fontFamily: 'monospace'
+                fontSize: '12px', color: '#665544', fontFamily: 'monospace'
             }));
 
             if (entry.canCraft) {
                 const btn = this._d(this.add.text(startX + colW - 50, ay + 14, '[ Lag ]', {
-                    fontSize: '11px', color: '#ff7722', fontFamily: 'monospace', fontStyle: 'bold'
+                    fontSize: '13px', color: '#ff7722', fontFamily: 'monospace', fontStyle: 'bold'
                 }).setInteractive({ useHandCursor: true }));
                 btn.on('pointerover', () => btn.setColor('#ffaa44'));
                 btn.on('pointerout', () => btn.setColor('#ff7722'));
@@ -514,9 +537,7 @@ class SmelteryScene extends Phaser.Scene {
         if (!hero.alloyInventory) hero.alloyInventory = {};
         hero.alloyInventory[alloyId] = (hero.alloyInventory[alloyId] || 0) + 1;
 
-        if (this.gs) {
-            this.gs._floatingText(hero.gridX, hero.gridY, `Laget: ${result.alloy.name}!`, '#ff7722');
-        }
+        EventBus.emit('floatingText', { gx: hero.gridX, gy: hero.gridY, msg: `Laget: ${result.alloy.name}!`, color: '#ff7722' });
 
         Audio.playPickup();
         this._refresh();
@@ -530,7 +551,7 @@ class SmelteryScene extends Phaser.Scene {
         let y = this.contentY;
 
         this._d(this.add.text(cx, y, 'Smi utstyr fra legeringer:', {
-            fontSize: '10px', color: '#887766', fontFamily: 'monospace'
+            fontSize: '12px', color: '#887766', fontFamily: 'monospace'
         }).setOrigin(0.5));
         y += 18;
 
@@ -542,7 +563,7 @@ class SmelteryScene extends Phaser.Scene {
 
         if (available.length === 0) {
             this._d(this.add.text(cx, y + 30, 'Ingen legeringer å smi med.\nLag legeringer i "Lag legering"-fanen først.', {
-                fontSize: '10px', color: '#444433', fontFamily: 'monospace', align: 'center'
+                fontSize: '12px', color: '#444433', fontFamily: 'monospace', align: 'center'
             }).setOrigin(0.5));
             return;
         }
@@ -553,7 +574,7 @@ class SmelteryScene extends Phaser.Scene {
             if (!alloy) continue;
 
             this._d(this.add.text(startX, rowY, `${alloy.name} (×${count}):`, {
-                fontSize: '11px', color: '#ff7722', fontFamily: 'monospace', fontStyle: 'bold'
+                fontSize: '13px', color: '#ff7722', fontFamily: 'monospace', fontStyle: 'bold'
             }));
             rowY += 18;
 
@@ -567,14 +588,15 @@ class SmelteryScene extends Phaser.Scene {
                 bg.fillRoundedRect(startX + 10, rowY, colW - 20, 36, 3);
 
                 this._d(this.add.text(startX + 18, rowY + 6, `${equip.name} (${equip.type === 'weapon' ? 'Våpen' : 'Rustning'})`, {
-                    fontSize: '10px', color: hexCol, fontFamily: 'monospace'
+                    fontSize: '12px', color: hexCol, fontFamily: 'monospace'
                 }));
                 this._d(this.add.text(startX + 18, rowY + 20, equip.desc, {
-                    fontSize: '8px', color: '#776655', fontFamily: 'monospace'
+                    fontSize: '11px', color: '#776655', fontFamily: 'monospace',
+                    wordWrap: { width: colW - 100 }
                 }));
 
                 const btn = this._d(this.add.text(startX + colW - 60, rowY + 10, '[ Smi ]', {
-                    fontSize: '10px', color: '#ff7722', fontFamily: 'monospace', fontStyle: 'bold'
+                    fontSize: '12px', color: '#ff7722', fontFamily: 'monospace', fontStyle: 'bold'
                 }).setInteractive({ useHandCursor: true }));
                 btn.on('pointerover', () => btn.setColor('#ffaa44'));
                 btn.on('pointerout', () => btn.setColor('#ff7722'));
@@ -597,13 +619,11 @@ class SmelteryScene extends Phaser.Scene {
 
         // Add forged item to inventory
         const added = hero.inventory.addItem(result.item);
-        if (!added && this.gs) {
-            this.gs.itemSpawner.spawnItemAt(hero.gridX, hero.gridY, result.item);
+        if (!added) {
+            EventBus.emit('spawnItem', { gx: hero.gridX, gy: hero.gridY, item: result.item });
         }
 
-        if (this.gs) {
-            this.gs._floatingText(hero.gridX, hero.gridY, `Smidd: ${result.item.name}!`, '#ffaa44');
-        }
+        EventBus.emit('floatingText', { gx: hero.gridX, gy: hero.gridY, msg: `Smidd: ${result.item.name}!`, color: '#ffaa44' });
 
         Audio.playPickup();
         this._refresh();
@@ -617,7 +637,7 @@ class SmelteryScene extends Phaser.Scene {
         if (entries.length === 0) return;
 
         this._d(this.add.text(startX, y, 'Lagrede grunnstoffer:', {
-            fontSize: '9px', color: '#665544', fontFamily: 'monospace'
+            fontSize: '13px', color: '#665544', fontFamily: 'monospace'
         }));
         y += 14;
 
@@ -629,7 +649,7 @@ class SmelteryScene extends Phaser.Scene {
             const hexCol = '#' + col.toString(16).padStart(6, '0');
 
             const badge = this._d(this.add.text(bx, by, `${symbol}:${count}`, {
-                fontSize: '9px', color: hexCol, fontFamily: 'monospace',
+                fontSize: '13px', color: hexCol, fontFamily: 'monospace',
                 backgroundColor: '#0a0818', padding: { x: 3, y: 1 }
             }));
             bx += badge.width + 6;
