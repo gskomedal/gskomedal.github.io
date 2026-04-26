@@ -33,6 +33,7 @@ class SmeltingSystem {
     smelt(mineralDef, hero) {
         const energyCost = this._adjustedEnergyCost(mineralDef.energyCost, hero);
         const elements = [];
+        let doubledSomething = false;
 
         for (const y of mineralDef.yields) {
             // Base chance + mining yield bonus from Geologist skill
@@ -46,7 +47,12 @@ class SmeltingSystem {
                 }
                 // Geologist smeltBonusElement: extra element per smelt
                 amount += (hero.smeltBonusElement || 0);
-                // Metallurgist smeltExtraYieldChance: chance for double yield
+                // Geologist T2 "Effektiv utvinning": double-yield chance per stack
+                if ((hero.doubleYieldChance || 0) > 0 && Math.random() < hero.doubleYieldChance) {
+                    amount *= 2;
+                    doubledSomething = true;
+                }
+                // Metallurgist smeltExtraYieldChance: chance for +50% yield
                 if ((hero.smeltExtraYieldChance || 0) > 0 && Math.random() < hero.smeltExtraYieldChance) {
                     amount = Math.ceil(amount * 1.5);
                 }
@@ -58,7 +64,23 @@ class SmeltingSystem {
             }
         }
 
-        return { elements, energyCost };
+        // Geolog T4 "Geode Splitter": every 10 smelts yields a free random gemstone.
+        let geodeElement = null;
+        if (hero.geodeSplitter) {
+            hero.smeltCountForGeode = (hero.smeltCountForGeode || 0) + 1;
+            if (hero.smeltCountForGeode >= 10) {
+                hero.smeltCountForGeode = 0;
+                // Grant 1 of a random already-discovered element (rarer preferred).
+                const discovered = Object.keys(hero.elementTracker.discovered || {});
+                if (discovered.length > 0) {
+                    const pick = discovered[Math.floor(Math.random() * discovered.length)];
+                    hero.elementTracker.collect(pick, 1);
+                    geodeElement = { symbol: pick, amount: 1 };
+                }
+            }
+        }
+
+        return { elements, energyCost, doubled: doubledSomething, geodeElement };
     }
 
     // ── Alloy Crafting: Elements → Alloy ─────────────────────────────────────
@@ -129,6 +151,8 @@ class SmeltingSystem {
             const check = this.canCraftAlloy(id, hero, fuelEnergy);
             results.push({ alloy: ALLOY_DEFS[id], ...check });
         }
+        // Semiconductors are crafted via dedicated craftSemiconductor() path
+        // in the Raffiner tab, not mixed with alloys.
         // Sort: craftable first, then by tier
         results.sort((a, b) => {
             if (a.canCraft !== b.canCraft) return a.canCraft ? -1 : 1;
@@ -140,13 +164,19 @@ class SmeltingSystem {
     // ── Forging: Alloy → Equipment ───────────────────────────────────────────
 
     /**
-     * Get equipment that can be forged from a given alloy.
+     * Get equipment that can be forged from a given alloy (hero + pet items).
      * @param {string} alloyId
-     * @returns {Array<object>} Array of ALLOY_EQUIPMENT items
+     * @returns {Array<object>} Array of ALLOY_EQUIPMENT + PET_EQUIPMENT items
      */
     getForgeableEquipment(alloyId) {
-        if (typeof ALLOY_EQUIPMENT === 'undefined') return [];
-        return Object.values(ALLOY_EQUIPMENT).filter(e => e.alloyId === alloyId);
+        const items = [];
+        if (typeof ALLOY_EQUIPMENT !== 'undefined') {
+            items.push(...Object.values(ALLOY_EQUIPMENT).filter(e => e.alloyId === alloyId));
+        }
+        if (typeof PET_EQUIPMENT !== 'undefined') {
+            items.push(...Object.values(PET_EQUIPMENT).filter(e => e.alloyId === alloyId));
+        }
+        return items;
     }
 
     /**
@@ -195,7 +225,7 @@ class SmeltingSystem {
      * @returns {number} Total energy available
      */
     calculateFuelEnergy(hero) {
-        let total = 0;
+        let total = hero.fuelReserve || 0;
         for (const entry of hero.inventory.backpack) {
             if (!entry) continue;
             const def = this._getFuelDef(entry);
@@ -213,6 +243,29 @@ class SmeltingSystem {
                 }
             }
         }
+        // Fission bonus: each U/Th in the element tracker acts as virtual
+        // fuel when the hero has mastered fission (Fysiker T3).
+        if (hero.fissionMastered || hero.fissionUpgraded) {
+            const fMul = hero.fissionEnergyMul || 1.0;
+            const uCount = hero.elementTracker ? hero.elementTracker.getCount('U') : 0;
+            const thCount = hero.elementTracker ? hero.elementTracker.getCount('Th') : 0;
+            total += Math.round((uCount * 50 + thCount * 40) * fMul);
+        }
+        // Fusion bonus: D-T fusion consumes H (deuterium) + Li (tritium bred
+        // from Li-6 + neutron). He is a byproduct, not fuel.
+        if (hero.fusionMastered) {
+            const fuMul = hero.fusionEnergyMul || 1.0;
+            const hCount = hero.elementTracker ? hero.elementTracker.getCount('H') : 0;
+            const liCount = hero.elementTracker ? hero.elementTracker.getCount('Li') : 0;
+            total += Math.round((hCount * 80 + liCount * 150) * fuMul);
+        }
+        // Semiconductor energy techs
+        if (hero.techSolarPanel) total += 30;
+        if (hero.techThermoelectric) {
+            const wn = hero.worldNum || 1;
+            if (wn >= 8) total += 50; // vulkan/magma-soner
+        }
+        if (hero.techReactorControl) total = Math.round(total * 1.5);
         return total;
     }
 
@@ -224,7 +277,14 @@ class SmeltingSystem {
      */
     consumeFuel(hero, energyNeeded) {
         let remaining = energyNeeded;
-        // Consume from backpack first
+        // Deduct from fuel reserve first
+        if (hero.fuelReserve > 0) {
+            const fromReserve = Math.min(hero.fuelReserve, remaining);
+            hero.fuelReserve -= fromReserve;
+            remaining -= fromReserve;
+        }
+        if (remaining <= 0) return true;
+        // Consume from backpack
         for (let i = 0; i < hero.inventory.backpack.length && remaining > 0; i++) {
             const entry = hero.inventory.backpack[i];
             if (!entry) continue;
@@ -252,6 +312,10 @@ class SmeltingSystem {
                 if (entry.count <= 0) hero.campStash.splice(i, 1);
             }
         }
+        // Store leftover energy in reserve for next operation
+        if (remaining < 0) {
+            hero.fuelReserve = (hero.fuelReserve || 0) + Math.abs(remaining);
+        }
         return remaining <= 0;
     }
 
@@ -265,7 +329,100 @@ class SmeltingSystem {
 
     _adjustedEnergyCost(baseCost, hero) {
         const efficiency = hero.smeltingEfficiency || 1.0;
-        return Math.max(1, Math.round(baseCost * efficiency));
+        const superMul = hero.techSuperconductor ? 0.7 : 1.0;
+        return Math.max(1, Math.round(baseCost * efficiency * superMul));
+    }
+
+    // ── Refining: Raw Element → Semiconductor-Grade ─────────────────────────
+
+    canRefine(recipeId, hero, fuelEnergy) {
+        if (typeof REFINING_RECIPES === 'undefined') return { canRefine: false };
+        const recipe = REFINING_RECIPES.find(r => r.id === recipeId);
+        if (!recipe) return { canRefine: false };
+        const cost = this._adjustedEnergyCost(recipe.energyCost, hero);
+        const missing = [];
+        for (const ing of recipe.input) {
+            const have = hero.elementTracker.getCount(ing.symbol);
+            if (have < ing.amount) missing.push({ symbol: ing.symbol, need: ing.amount, have });
+        }
+        return { canRefine: missing.length === 0 && fuelEnergy >= cost, energyCost: cost, missing };
+    }
+
+    refine(recipeId, hero) {
+        if (typeof REFINING_RECIPES === 'undefined') return { success: false };
+        const recipe = REFINING_RECIPES.find(r => r.id === recipeId);
+        if (!recipe) return { success: false };
+        for (const ing of recipe.input) {
+            hero.elementTracker.collected[ing.symbol] -= ing.amount;
+            if (hero.elementTracker.collected[ing.symbol] <= 0) delete hero.elementTracker.collected[ing.symbol];
+        }
+        const cost = this._adjustedEnergyCost(recipe.energyCost, hero);
+        if (!hero.refinedElements) hero.refinedElements = {};
+        hero.refinedElements[recipe.id] = (hero.refinedElements[recipe.id] || 0) + 1;
+        return { success: true, recipe, energyCost: cost };
+    }
+
+    // ── Semiconductor crafting (uses refined elements) ──────────────────────
+
+    canCraftSemiconductor(semiId, hero, fuelEnergy) {
+        if (typeof SEMICONDUCTOR_DEFS === 'undefined') return { canCraft: false };
+        const semi = SEMICONDUCTOR_DEFS[semiId];
+        if (!semi) return { canCraft: false };
+        const cost = this._adjustedEnergyCost(semi.energyCost, hero);
+        const missing = [];
+        for (const ing of semi.recipe) {
+            if (ing.refined) {
+                const have = (hero.refinedElements || {})[ing.refined] || 0;
+                if (have < ing.amount) missing.push({ symbol: ing.refined, need: ing.amount, have });
+            } else {
+                const have = hero.elementTracker.getCount(ing.symbol);
+                if (have < ing.amount) missing.push({ symbol: ing.symbol, need: ing.amount, have });
+            }
+        }
+        return { canCraft: missing.length === 0 && fuelEnergy >= cost, energyCost: cost, missing };
+    }
+
+    craftSemiconductor(semiId, hero) {
+        if (typeof SEMICONDUCTOR_DEFS === 'undefined') return { success: false };
+        const semi = SEMICONDUCTOR_DEFS[semiId];
+        if (!semi) return { success: false };
+        for (const ing of semi.recipe) {
+            if (ing.refined) {
+                hero.refinedElements[ing.refined] = (hero.refinedElements[ing.refined] || 0) - ing.amount;
+                if (hero.refinedElements[ing.refined] <= 0) delete hero.refinedElements[ing.refined];
+            } else {
+                hero.elementTracker.collected[ing.symbol] -= ing.amount;
+                if (hero.elementTracker.collected[ing.symbol] <= 0) delete hero.elementTracker.collected[ing.symbol];
+            }
+        }
+        const cost = this._adjustedEnergyCost(semi.energyCost, hero);
+        if (!hero.alloyInventory) hero.alloyInventory = {};
+        hero.alloyInventory[semiId] = (hero.alloyInventory[semiId] || 0) + 1;
+        return { success: true, semi, energyCost: cost };
+    }
+
+    // ── Technology installation (one-time, from semiconductor inventory) ────
+
+    canInstallTech(techId, hero) {
+        if (typeof TECH_UPGRADES === 'undefined') return false;
+        const tech = TECH_UPGRADES[techId];
+        if (!tech) return false;
+        if (hero[tech.heroFlag]) return false; // already installed
+        const have = (hero.alloyInventory || {})[tech.semiId] || 0;
+        return have >= tech.amount;
+    }
+
+    installTech(techId, hero) {
+        if (typeof TECH_UPGRADES === 'undefined') return false;
+        const tech = TECH_UPGRADES[techId];
+        if (!tech || hero[tech.heroFlag]) return false;
+        const have = (hero.alloyInventory || {})[tech.semiId] || 0;
+        if (have < tech.amount) return false;
+        hero.alloyInventory[tech.semiId] -= tech.amount;
+        if (hero.alloyInventory[tech.semiId] <= 0) delete hero.alloyInventory[tech.semiId];
+        hero[tech.heroFlag] = true;
+        if (tech.heroFlag === 'techForceField') hero.techForceFieldHP = 15;
+        return true;
     }
 
     _adjustedTime(baseTime, hero) {

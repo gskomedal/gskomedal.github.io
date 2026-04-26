@@ -36,12 +36,15 @@ class MonsterManager {
             scene.monsters.push(new Monster(scene, x, y, types[Math.floor(Math.random() * types.length)]));
         }
 
-        // Apply difficulty HP/ATK multipliers
+        // Apply difficulty + NG+ HP/ATK multipliers
         const mods = scene._diffMods();
+        const ngPlus = scene.hero?.ngPlusLevel || 0;
+        const ngHpMul  = 1 + ngPlus * 0.40;
+        const ngAtkMul = 1 + ngPlus * 0.25;
         for (const m of scene.monsters) {
-            m.maxHp  = Math.max(1, Math.round(m.maxHp  * mods.hpMul));
+            m.maxHp  = Math.max(1, Math.round(m.maxHp  * mods.hpMul * ngHpMul));
             m.hp     = m.maxHp;
-            m.attack = Math.max(1, Math.round(m.attack * mods.atkMul));
+            m.attack = Math.max(1, Math.round(m.attack * mods.atkMul * ngAtkMul));
             m._draw();
         }
     }
@@ -51,8 +54,11 @@ class MonsterManager {
         if (wn <= 1) return ['goblin'];
         if (wn <= 2) return ['goblin', 'orc', 'orc'];
         if (wn <= 3) return ['orc', 'orc', 'troll'];
-        if (wn <= 5) return ['orc', 'troll', 'troll'];
-        return ['troll', 'troll', 'troll'];
+        if (wn <= 4) return ['orc', 'skeleton', 'troll'];
+        if (wn <= 6) return ['skeleton', 'troll', 'golem'];
+        if (wn <= 8) return ['troll', 'golem', 'wraith'];
+        if (wn <= 10) return ['golem', 'wraith', 'demon'];
+        return ['wraith', 'demon', 'demon'];
     }
 
     // ── Monster AI tick ───────────────────────────────────────────────────────
@@ -145,6 +151,8 @@ class MonsterManager {
 
         if (!regularReady && !bossReady) return;
 
+        if (regularReady) scene.combat.tickLaserTurrets();
+
         for (const m of [...scene.monsters]) {
             if (!m.alive) continue;
             const isBoss = m.type === 'boss';
@@ -153,6 +161,11 @@ class MonsterManager {
             // Tick monster status effects (acid burn, stun)
             if (m.tickStatusEffects) m.tickStatusEffects();
             if (m.stunTurns > 0) continue; // stunned – skip turn
+            // Heavy/slow monsters (troll, golem) act on every Nth tick
+            if (!isBoss && (m.moveCadence || 1) > 1) {
+                m.tickCount = (m.tickCount || 0) + 1;
+                if (m.tickCount % m.moveCadence !== 0) continue;
+            }
             this._moveMonster(m);
         }
     }
@@ -166,6 +179,17 @@ class MonsterManager {
         if (dist === 1) {
             scene.combat.monsterAttack(m);
             return;
+        }
+
+        // Erratic (goblin) – occasionally hesitates instead of advancing
+        if (m.isErratic && Math.random() < 0.18) return;
+
+        // Skeleton archer – fire an arrow if hero is on the same row/column with clear line
+        if (m.isArcher && (m.gridX === hx || m.gridY === hy) && dist >= 2 && dist <= 4) {
+            if (this._hasClearShot(m.gridX, m.gridY, hx, hy)) {
+                this._fireArrow(m);
+                return;
+            }
         }
 
         // Attack pet if adjacent and can't reach hero
@@ -186,12 +210,38 @@ class MonsterManager {
             const nx = m.gridX + dx, ny = m.gridY + dy;
             if (nx < 0 || nx >= scene.tileW || ny < 0 || ny >= scene.tileH) continue;
             const t = scene.maze[ny][nx];
-            if (t === TILE.WALL || t === TILE.CRACKED_WALL || t === TILE.DOOR) continue;
+            // Wraiths phase through walls; everyone else is blocked
+            if (!m.canPhase && (t === TILE.WALL || t === TILE.CRACKED_WALL || t === TILE.DOOR)) continue;
             if (nx === hx && ny === hy) continue;
             if (this.monsterAt(nx, ny)) continue;
             if (scene.merchant && nx === scene.merchant.gridX && ny === scene.merchant.gridY) continue;
             m.moveTo(nx, ny); break;
         }
+    }
+
+    /** True if the straight line between (x1,y1) and (x2,y2) is unobstructed.
+     *  Assumes same row or same column. */
+    _hasClearShot(x1, y1, x2, y2) {
+        const scene = this.scene;
+        const dx = Math.sign(x2 - x1), dy = Math.sign(y2 - y1);
+        let x = x1 + dx, y = y1 + dy;
+        while (x !== x2 || y !== y2) {
+            const t = scene.maze[y][x];
+            if (t === TILE.WALL || t === TILE.CRACKED_WALL || t === TILE.DOOR) return false;
+            x += dx; y += dy;
+        }
+        return true;
+    }
+
+    _fireArrow(m) {
+        const scene = this.scene;
+        const dmg = Math.max(1, Math.floor(m.attack * 0.5));
+        const died = scene.hero.takeDamage(dmg);
+        if (typeof Audio !== 'undefined' && Audio.playHurt) Audio.playHurt();
+        scene._floatingText(scene.hero.gridX, scene.hero.gridY, `→ -${dmg}`, '#ddccaa');
+        scene.hero._drawSprite();
+        scene.cameras.main.shake(80, 0.004);
+        if (died) scene._heroDied();
     }
 
     monsterAt(gx, gy) {

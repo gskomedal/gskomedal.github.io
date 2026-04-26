@@ -16,14 +16,16 @@ class ChemLabScene extends Phaser.Scene {
         this.chem = new ChemistrySystem();
         this.smelter = new SmeltingSystem();
         this._dyn = [];
-        this._filter = 'all'; // 'all' | 'potion' | 'explosive' | 'medicine'
+        this._filter = 'all';
+        this._elementFilter = null;
+        this._tab = 'recipes'; // 'recipes' | 'transmutation'
 
         // ── Dim overlay ───────────────────────────────────────────────────────
         this.add.rectangle(cx, cy, W, H, 0x000000, 0.82);
 
-        // ── Panel ─────────────────────────────────────────────────────────────
-        this.panelW = Math.min(W - 10, 700);
-        this.panelH = Math.min(H - 10, 520);
+        // ── Panel (larger for better overview) ────────────────────────────────
+        this.panelW = Math.min(W - 40, 960);
+        this.panelH = Math.min(H - 40, 720);
         this.px = cx - this.panelW / 2;
         this.py = cy - this.panelH / 2;
 
@@ -36,7 +38,7 @@ class ChemLabScene extends Phaser.Scene {
         }
 
         // ── Character portrait (sits in the scene, lower-right of bg) ─────────
-        const portraitSize = 120;
+        const portraitSize = 130;
         const portraitX = this.px + this.panelW - portraitSize - 6;
         const portraitY = this.py + this.panelH - portraitSize - 6;
         const portraitGfx = this.add.graphics();
@@ -63,19 +65,39 @@ class ChemLabScene extends Phaser.Scene {
         panel.strokeRoundedRect(this.px, this.py, this.panelW, this.panelH, 8);
 
         // Title
-        this.add.text(cx, this.py + 18, 'KJEMISK LABORATORIUM', {
-            fontSize: '14px', color: '#33dd88', fontFamily: 'monospace', fontStyle: 'bold'
+        this.add.text(cx, this.py + 22, 'KJEMISK LABORATORIUM', {
+            fontSize: '18px', color: '#33dd88', fontFamily: 'monospace', fontStyle: 'bold'
         }).setOrigin(0.5);
 
         // Fuel indicator
         const fuel = this.smelter.calculateFuelEnergy(this.heroRef);
-        this._fuelText = this.add.text(this.px + this.panelW - 20, this.py + 18, `Energi: ${fuel}`, {
-            fontSize: '12px', color: '#448844', fontFamily: 'monospace'
+        this._fuelText = this.add.text(this.px + this.panelW - 20, this.py + 22, `Energi: ${fuel}`, {
+            fontSize: '14px', color: '#448844', fontFamily: 'monospace'
         }).setOrigin(1, 0.5);
 
-        this.add.rectangle(cx, this.py + 34, this.panelW - 20, 1, 0x113322);
+        this.add.rectangle(cx, this.py + 42, this.panelW - 20, 1, 0x113322);
 
-        // ── Filter buttons ────────────────────────────────────────────────────
+        // ── Tab buttons (Recipes | Transmutation) ─────────────────────────────
+        this._tabBtns = [];
+        const showTransmutation = !!this.heroRef.transmutationUnlocked;
+        const tabs = [{ id: 'recipes', label: 'Oppskrifter' }];
+        if (showTransmutation) tabs.push({ id: 'transmutation', label: 'Transmutasjon' });
+
+        const tabY = this.py + 52;
+        tabs.forEach((t, i) => {
+            const tx = this.px + 30 + i * 140;
+            const active = this._tab === t.id;
+            const btn = this.add.text(tx, tabY, t.label, {
+                fontSize: '15px', color: active ? '#33dd88' : '#335533',
+                fontFamily: 'monospace', fontStyle: active ? 'bold' : 'normal'
+            }).setInteractive({ useHandCursor: true });
+            btn.on('pointerdown', () => { this._tab = t.id; this._scrollOffset = 0; this._refresh(); });
+            this._tabBtns.push(btn);
+        });
+
+        this.add.rectangle(cx, tabY + 16, this.panelW - 20, 1, 0x113322);
+
+        // ── Filter buttons (only for recipes tab) ─────────────────────────────
         this._filterBtns = [];
         const filters = [
             { id: 'all', label: 'Alle' },
@@ -84,57 +106,115 @@ class ChemLabScene extends Phaser.Scene {
             { id: 'medicine', label: 'Medisin' },
             { id: 'acid', label: 'Syrer' },
         ];
-        const filterY = this.py + 50;
+        const filterY = tabY + 26;
+        const filterStep = Math.min(100, (this.panelW - 80) / filters.length);
         filters.forEach((f, i) => {
-            const fx = this.px + 30 + i * 100 + 45;
+            const fx = this.px + 30 + i * filterStep + filterStep / 2;
             const active = this._filter === f.id;
             const btn = this.add.text(fx, filterY, f.label, {
-                fontSize: '12px', color: active ? '#33dd88' : '#335533',
+                fontSize: '14px', color: active ? '#33dd88' : '#335533',
                 fontFamily: 'monospace', fontStyle: active ? 'bold' : 'normal'
             }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-            btn.on('pointerdown', () => { this._filter = f.id; this._refresh(); });
+            btn.on('pointerdown', () => { this._filter = f.id; this._scrollOffset = 0; this._refresh(); });
             this._filterBtns.push(btn);
         });
 
-        this.add.rectangle(cx, filterY + 12, this.panelW - 20, 1, 0x113322);
+        this.add.rectangle(cx, filterY + 14, this.panelW - 20, 1, 0x113322);
 
         // Close
-        const closeBtn = this.add.text(this.px + this.panelW - 20, this.py + 8, '✕', {
-            fontSize: '18px', color: '#448844', fontFamily: 'monospace'
+        const closeBtn = this.add.text(this.px + this.panelW - 20, this.py + 10, '✕', {
+            fontSize: '22px', color: '#448844', fontFamily: 'monospace'
         }).setOrigin(0.5).setInteractive({ useHandCursor: true });
         closeBtn.on('pointerdown', () => this.scene.stop());
         this.input.keyboard.on('keydown-ESC', () => this.scene.stop());
         this.input.keyboard.on('keydown-C', () => this.scene.stop());
 
-        this.contentY = filterY + 22;
+        this.contentY = filterY + 26;
         this._scrollOffset = 0;
+        this._maxScroll = 0;
 
         // Mouse wheel scrolling for recipe list
         this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
-            this._scrollOffset = Math.max(0, this._scrollOffset + deltaY * 0.5);
+            this._scrollOffset = this._clampScroll(this._scrollOffset + deltaY * 0.5);
             this._refresh();
         });
 
+        // Touch / mouse-drag scrolling
+        this._dragState = { active: false, startY: 0, startOffset: 0, engaged: false };
+        this.input.on('pointerdown', (pointer) => {
+            this._dragState.active = true;
+            this._dragState.engaged = false;
+            this._dragState.startY = pointer.y;
+            this._dragState.startOffset = this._scrollOffset;
+        });
+        this.input.on('pointermove', (pointer) => {
+            if (!this._dragState.active || !pointer.isDown) return;
+            const dy = pointer.y - this._dragState.startY;
+            if (!this._dragState.engaged && Math.abs(dy) < 8) return;
+            this._dragState.engaged = true;
+            this._scrollOffset = this._clampScroll(this._dragState.startOffset - dy);
+            this._refresh();
+        });
+        this.input.on('pointerup', () => { this._dragState.active = false; });
+        this.input.on('pointerupoutside', () => { this._dragState.active = false; });
+
         this._refresh();
+    }
+
+    _clampScroll(v) {
+        return Math.max(0, Math.min(v, this._maxScroll || 0));
+    }
+
+    _viewportHeight() {
+        return this.panelH - (this.contentY - this.py) - 30;
     }
 
     _refresh() {
         UIHelper.clearDynamic(this._dyn);
 
+        // Update tab styles
+        const tabIds = this._tabBtns.map((_, i) => i === 0 ? 'recipes' : 'transmutation');
+        UIHelper.updateTabButtons(this._tabBtns, tabIds, this._tab, '#33dd88', '#335533');
+
+        // Show/hide filter buttons based on active tab
+        this._filterBtns.forEach(btn => btn.setVisible(this._tab === 'recipes'));
+
         // Dark backing behind content for readability
         const cbg = this._d(this.add.graphics());
         cbg.fillStyle(0x080a10, 0.78);
-        cbg.fillRoundedRect(this.px + 6, this.contentY - 4, this.panelW - 150, this.panelH - (this.contentY - this.py) - 10, 4);
+        cbg.fillRoundedRect(this.px + 6, this.contentY - 4, this.panelW - 160, this.panelH - (this.contentY - this.py) - 10, 4);
 
         UIHelper.updateTabButtons(this._filterBtns, ['all', 'potion', 'explosive', 'medicine', 'acid'], this._filter, '#33dd88', '#335533');
 
         const fuel = this.smelter.calculateFuelEnergy(this.heroRef);
         this._fuelText.setText(`Energi: ${fuel}`);
 
-        if (this._hasKjemikerSkill()) {
-            this._drawRecipes(fuel);
-        } else {
+        if (!this._hasKjemikerSkill()) {
             this._drawLockedMessage();
+            this._contentEndY = this.contentY;
+        } else if (this._tab === 'transmutation') {
+            this._drawTransmutationTab();
+        } else {
+            this._drawRecipes(fuel);
+        }
+
+        // Compute max scroll from last-drawn content, clamp and draw scrollbar.
+        const viewportH = this._viewportHeight();
+        const contentSpan = Math.max(0, (this._contentEndY || 0) - this.contentY);
+        this._maxScroll = Math.max(0, contentSpan - viewportH);
+        this._scrollOffset = this._clampScroll(this._scrollOffset);
+
+        if (this._maxScroll > 0) {
+            const trackX = this.px + this.panelW - 170;
+            const trackY = this.contentY;
+            const trackH = viewportH;
+            const thumbH = Math.max(24, trackH * (trackH / (trackH + this._maxScroll)));
+            const thumbY = trackY + (trackH - thumbH) * (this._scrollOffset / this._maxScroll);
+            const bar = this._d(this.add.graphics());
+            bar.fillStyle(0x113322, 0.6);
+            bar.fillRoundedRect(trackX, trackY, 4, trackH, 2);
+            bar.fillStyle(0x33dd88, 0.7);
+            bar.fillRoundedRect(trackX, thumbY, 4, thumbH, 2);
         }
     }
 
@@ -147,42 +227,110 @@ class ChemLabScene extends Phaser.Scene {
     _drawLockedMessage() {
         const cx = this.px + this.panelW / 2;
         const cy = this.contentY + (this.panelH - (this.contentY - this.py)) / 2 - 40;
-        this._d(this.add.text(cx, cy, '🔒', { fontSize: '32px' }).setOrigin(0.5));
-        this._d(this.add.text(cx, cy + 30, 'Krever Kjemiker-skill!', {
-            fontSize: '14px', color: '#33dd88', fontFamily: 'monospace', fontStyle: 'bold'
+        this._d(this.add.text(cx, cy, '🔒', { fontSize: '36px' }).setOrigin(0.5));
+        this._d(this.add.text(cx, cy + 34, 'Krever Kjemiker-skill!', {
+            fontSize: '16px', color: '#33dd88', fontFamily: 'monospace', fontStyle: 'bold'
         }).setOrigin(0.5));
-        this._d(this.add.text(cx, cy + 50, 'Lær Potente potions i skilltreet\nfor å bruke laboratoriet.', {
-            fontSize: '12px', color: '#445544', fontFamily: 'monospace', align: 'center'
+        this._d(this.add.text(cx, cy + 58, 'Lær Potente potions i skilltreet\nfor å bruke laboratoriet.', {
+            fontSize: '14px', color: '#445544', fontFamily: 'monospace', align: 'center'
         }).setOrigin(0.5));
     }
 
     _d(obj) { this._dyn.push(obj); return obj; }
 
+    // ── Element filter row ───────────────────────────────────────────────────
+
+    _drawElementFilterRow(y) {
+        const hero = this.heroRef;
+        const collected = hero.elementTracker.collected;
+        const allRecipeElements = new Set();
+
+        // Gather all elements used in any recipe
+        for (const mol of Object.values(MOLECULE_DEFS)) {
+            for (const r of mol.recipe) allRecipeElements.add(r.symbol);
+        }
+
+        const leftX = this.px + 10;
+        let bx = leftX;
+        const maxW = this.panelW - 180;
+
+        // "Alle" reset button
+        const allBtn = this._d(this.add.text(bx, y, 'Alle', {
+            fontSize: '12px',
+            color: this._elementFilter === null ? '#33dd88' : '#335533',
+            fontFamily: 'monospace', fontStyle: this._elementFilter === null ? 'bold' : 'normal',
+            backgroundColor: '#081808', padding: { x: 3, y: 1 }
+        }).setInteractive({ useHandCursor: true }));
+        allBtn.on('pointerdown', () => { this._elementFilter = null; this._scrollOffset = 0; this._refresh(); });
+        bx += allBtn.width + 4;
+
+        for (const symbol of allRecipeElements) {
+            const count = collected[symbol] || 0;
+            const elem = typeof ELEMENTS !== 'undefined' ? ELEMENTS[symbol] : null;
+            const col = elem ? elem.color : 0xaaaaaa;
+            const hexCol = '#' + col.toString(16).padStart(6, '0');
+            const isActive = this._elementFilter === symbol;
+            const dimmed = count === 0;
+
+            const badge = this._d(this.add.text(bx, y, symbol, {
+                fontSize: '12px',
+                color: isActive ? '#33dd88' : (dimmed ? '#222222' : hexCol),
+                fontFamily: 'monospace',
+                fontStyle: isActive ? 'bold' : 'normal',
+                backgroundColor: isActive ? '#113311' : '#081808',
+                padding: { x: 3, y: 1 }
+            }).setInteractive({ useHandCursor: true }));
+            badge.on('pointerdown', () => {
+                this._elementFilter = isActive ? null : symbol;
+                this._scrollOffset = 0;
+                this._refresh();
+            });
+            bx += badge.width + 3;
+            if (bx > leftX + maxW) { bx = leftX; y += 18; }
+        }
+
+        return y + 20;
+    }
+
     _drawRecipes(fuel) {
         const hero = this.heroRef;
-        const cx = this.px + this.panelW / 2;
         let y = this.contentY;
-        const colW = Math.min(340, this.panelW - 40);
+
+        // Element filter row
+        y = this._drawElementFilterRow(y);
+
+        const colW = Math.min(500, this.panelW - 180);
         const leftX = this.px + 20;
-        const rightX = cx + 10;
+        const rightX = this.px + this.panelW - 160;
+        const rowStep = 62;
 
         // Left column: recipes
         let allMols = this.chem.getAvailableMolecules(hero, fuel);
 
-        // Apply filter
+        // Apply subtype filter
         if (this._filter !== 'all') {
             allMols = allMols.filter(e => e.mol.subtype === this._filter);
         }
 
+        // Apply element filter
+        if (this._elementFilter) {
+            allMols = allMols.filter(e =>
+                e.mol.recipe.some(r => r.symbol === this._elementFilter)
+            );
+        }
+
         if (allMols.length === 0) {
-            this._d(this.add.text(cx, y + 40, 'Ingen oppskrifter tilgjengelig.', {
-                fontSize: '13px', color: '#334433', fontFamily: 'monospace'
+            this._d(this.add.text(leftX + colW / 2, y + 40, 'Ingen oppskrifter tilgjengelig.', {
+                fontSize: '14px', color: '#334433', fontFamily: 'monospace'
             }).setOrigin(0.5));
         }
 
+        const visBot = this.py + this.panelH - 30;
+
         allMols.forEach((entry, idx) => {
-            const my = y + idx * 58 - (this._scrollOffset || 0);
-            if (my > this.py + this.panelH - 80 || my < y - 20) return;
+            const baseY = y + idx * rowStep;
+            const my = baseY - (this._scrollOffset || 0);
+            if (my > visBot || my < y - rowStep) return;
             const m = entry.mol;
             const can = entry.canCraft;
             const col = can ? 0x33dd88 : 0x223322;
@@ -190,22 +338,22 @@ class ChemLabScene extends Phaser.Scene {
 
             const bg = this._d(this.add.graphics());
             bg.fillStyle(col, 0.08);
-            bg.fillRoundedRect(leftX, my, colW, 52, 4);
+            bg.fillRoundedRect(leftX, my, colW, 56, 4);
             bg.lineStyle(1, col, 0.3);
-            bg.strokeRoundedRect(leftX, my, colW, 52, 4);
+            bg.strokeRoundedRect(leftX, my, colW, 56, 4);
 
             // Subtype icon
             const icons = { base: '⚗', acid: '🧪', potion: '🧪', medicine: '💊', explosive: '💣', salt: '⚗' };
             const icon = icons[m.subtype] || '⚗';
-            this._d(this.add.text(leftX + 6, my + 4, icon, { fontSize: '12px' }));
+            this._d(this.add.text(leftX + 6, my + 4, icon, { fontSize: '14px' }));
 
-            // Name + formula – truncate long names to fit slot
-            const dispName = m.name.length > 28 ? m.name.slice(0, 27) + '…' : m.name;
-            this._d(this.add.text(leftX + 24, my + 5, dispName, {
-                fontSize: '13px', color: hexCol, fontFamily: 'monospace', fontStyle: 'bold'
+            // Name + formula
+            const dispName = m.name.length > 26 ? m.name.slice(0, 25) + '…' : m.name;
+            this._d(this.add.text(leftX + 28, my + 5, dispName, {
+                fontSize: '15px', color: hexCol, fontFamily: 'monospace', fontStyle: 'bold'
             }));
-            this._d(this.add.text(leftX + 24, my + 19, `${m.formula}  [T${m.tier}]`, {
-                fontSize: '12px', color: '#556655', fontFamily: 'monospace'
+            this._d(this.add.text(leftX + 28, my + 22, `${m.formula}  [T${m.tier}]`, {
+                fontSize: '13px', color: '#556655', fontFamily: 'monospace'
             }));
 
             // Recipe elements
@@ -214,18 +362,18 @@ class ChemLabScene extends Phaser.Scene {
                 const ok = have >= r.amount;
                 return `${r.symbol}:${have}/${r.amount}${ok ? '' : '!'}`;
             }).join('  ');
-            this._d(this.add.text(leftX + 6, my + 33, recipeStr, {
-                fontSize: '12px', color: '#556655', fontFamily: 'monospace'
+            this._d(this.add.text(leftX + 6, my + 38, recipeStr, {
+                fontSize: '13px', color: '#556655', fontFamily: 'monospace'
             }));
 
             // Effect preview
-            this._d(this.add.text(leftX + colW - 8, my + 36, m.desc.length > 35 ? m.desc.slice(0, 33) + '…' : m.desc, {
+            this._d(this.add.text(leftX + colW - 8, my + 40, m.desc.length > 32 ? m.desc.slice(0, 30) + '…' : m.desc, {
                 fontSize: '12px', color: '#445544', fontFamily: 'monospace'
             }).setOrigin(1, 0));
 
             if (can) {
-                const btn = this._d(this.add.text(leftX + colW - 50, my + 10, '[ Lag ]', {
-                    fontSize: '13px', color: '#33dd88', fontFamily: 'monospace', fontStyle: 'bold'
+                const btn = this._d(this.add.text(leftX + colW - 56, my + 10, '[ Lag ]', {
+                    fontSize: '15px', color: '#33dd88', fontFamily: 'monospace', fontStyle: 'bold'
                 }).setInteractive({ useHandCursor: true }));
                 btn.on('pointerover', () => btn.setColor('#66ffaa'));
                 btn.on('pointerout', () => btn.setColor('#33dd88'));
@@ -235,7 +383,10 @@ class ChemLabScene extends Phaser.Scene {
 
         // Right side: element inventory
         const elemY = this.contentY;
-        this._drawElementCounts(rightX, elemY, colW - 20);
+        this._drawElementCounts(rightX, elemY, 150);
+
+        // End-of-content for scrollbar
+        this._contentEndY = y + allMols.length * rowStep;
     }
 
     _doSynthesize(moleculeId) {
@@ -256,35 +407,141 @@ class ChemLabScene extends Phaser.Scene {
 
         EventBus.emit('floatingText', { gx: hero.gridX, gy: hero.gridY, msg: `Laget: ${result.item.name}!`, color: '#33dd88' });
 
+        // Kjemiker T3 "Double Brew": drop an extra copy if the skill triggered.
+        if (result.bonusItem) {
+            const bonusAdded = hero.inventory.addItem(result.bonusItem);
+            if (!bonusAdded) {
+                EventBus.emit('spawnItem', { gx: hero.gridX, gy: hero.gridY, item: result.bonusItem });
+            }
+            EventBus.emit('floatingText', { gx: hero.gridX, gy: hero.gridY - 1, msg: 'Dobbel brygging!', color: '#ffcc44' });
+        }
+
         Audio.playPickup();
         this._refresh();
     }
 
     _drawElementCounts(x, y, w) {
         this._d(this.add.text(x, y, 'GRUNNSTOFFER:', {
-            fontSize: '13px', color: '#556655', fontFamily: 'monospace', fontStyle: 'bold'
+            fontSize: '14px', color: '#556655', fontFamily: 'monospace', fontStyle: 'bold'
         }));
 
-        const collected = this.heroRef.elementTracker.collected;
+        const hero = this.heroRef;
+        const collected = hero.elementTracker.collected;
         const entries = Object.entries(collected).filter(([, v]) => v > 0);
         if (entries.length === 0) {
-            this._d(this.add.text(x, y + 14, 'Ingen lagret.', {
-                fontSize: '13px', color: '#334433', fontFamily: 'monospace'
+            this._d(this.add.text(x, y + 18, 'Ingen lagret.', {
+                fontSize: '14px', color: '#334433', fontFamily: 'monospace'
             }));
             return;
         }
 
-        let bx = x, by = y + 14;
+        let bx = x, by = y + 18;
         for (const [symbol, count] of entries) {
             const elem = typeof ELEMENTS !== 'undefined' ? ELEMENTS[symbol] : null;
             const col = elem ? elem.color : 0xaaaaaa;
             const hexCol = '#' + col.toString(16).padStart(6, '0');
-            const badge = this._d(this.add.text(bx, by, `${symbol}:${count}`, {
-                fontSize: '13px', color: hexCol, fontFamily: 'monospace',
+            this._d(this.add.text(bx, by, `${symbol}:${count}`, {
+                fontSize: '14px', color: hexCol, fontFamily: 'monospace',
                 backgroundColor: '#081808', padding: { x: 3, y: 1 }
             }));
-            bx += badge.width + 6;
-            if (bx > x + w - 30) { bx = x; by += 16; }
+            bx += 60;
+            if (bx > x + w - 30) { bx = x; by += 22; }
         }
+    }
+
+    // ── Transmutation tab ────────────────────────────────────────────────────
+
+    _drawTransmutationTab() {
+        const hero = this.heroRef;
+        const collected = hero.elementTracker.collected;
+        const entries = Object.entries(collected).filter(([, v]) => v > 0);
+        let y = this.contentY;
+        const leftX = this.px + 20;
+        const colW = Math.min(500, this.panelW - 180);
+
+        this._d(this.add.text(leftX, y, 'Transmutasjon: 5 av et grunnstoff → 1 av nabo i periodesystemet', {
+            fontSize: '13px', color: '#ff88cc', fontFamily: 'monospace'
+        }));
+        y += 24;
+
+        if (entries.length === 0) {
+            this._d(this.add.text(leftX + colW / 2, y + 40, 'Ingen grunnstoffer lagret.', {
+                fontSize: '14px', color: '#334433', fontFamily: 'monospace'
+            }).setOrigin(0.5));
+            this._contentEndY = y + 80;
+            return;
+        }
+
+        const visBot = this.py + this.panelH - 30;
+        const rowStep = 36;
+
+        entries.forEach(([symbol, count], idx) => {
+            const baseY = y + idx * rowStep;
+            const my = baseY - (this._scrollOffset || 0);
+            if (my > visBot || my < y - rowStep) return;
+
+            const canTransmute = count >= 5;
+            const elem = typeof ELEMENTS !== 'undefined' ? ELEMENTS[symbol] : null;
+            const col = elem ? elem.color : 0xaaaaaa;
+            const hexCol = '#' + col.toString(16).padStart(6, '0');
+
+            // Find target element
+            let targetSym = null;
+            if (elem && typeof ELEMENTS !== 'undefined') {
+                const srcZ = elem.atomicNumber;
+                for (const [sym, def] of Object.entries(ELEMENTS)) {
+                    if (def.atomicNumber === srcZ + 1) { targetSym = sym; break; }
+                }
+                if (!targetSym) {
+                    for (const [sym, def] of Object.entries(ELEMENTS)) {
+                        if (def.atomicNumber === srcZ - 1) { targetSym = sym; break; }
+                    }
+                }
+            }
+
+            const bg = this._d(this.add.graphics());
+            bg.fillStyle(canTransmute ? 0xff88cc : 0x221122, 0.08);
+            bg.fillRoundedRect(leftX, my, colW, 30, 4);
+            bg.lineStyle(1, canTransmute ? 0xff88cc : 0x331133, 0.3);
+            bg.strokeRoundedRect(leftX, my, colW, 30, 4);
+
+            this._d(this.add.text(leftX + 10, my + 7, `${symbol} ×${count}`, {
+                fontSize: '14px', color: hexCol, fontFamily: 'monospace', fontStyle: 'bold'
+            }));
+
+            const arrow = targetSym ? `→ 1 ${targetSym}` : '(ingen nabo)';
+            this._d(this.add.text(leftX + 120, my + 7, `5 ${symbol} ${arrow}`, {
+                fontSize: '13px', color: canTransmute ? '#cc88aa' : '#443344', fontFamily: 'monospace'
+            }));
+
+            if (canTransmute && targetSym) {
+                const btn = this._d(this.add.text(leftX + colW - 80, my + 5, '[ Transmuter ]', {
+                    fontSize: '13px', color: '#ff88cc', fontFamily: 'monospace', fontStyle: 'bold'
+                }).setInteractive({ useHandCursor: true }));
+                btn.on('pointerover', () => btn.setColor('#ffaadd'));
+                btn.on('pointerout', () => btn.setColor('#ff88cc'));
+                btn.on('pointerdown', () => this._doTransmute(symbol));
+            }
+        });
+
+        this._contentEndY = y + entries.length * rowStep;
+    }
+
+    _doTransmute(symbol) {
+        const hero = this.heroRef;
+        const produced = this.chem.transmute(hero, symbol);
+        if (!produced) return;
+        EventBus.emit('floatingText', { gx: hero.gridX, gy: hero.gridY, msg: `Transmuted: 5 ${symbol} → 1 ${produced}`, color: '#ff88cc' });
+
+        const newBonuses = hero.elementTracker.checkCompletions();
+        if (newBonuses.length > 0) {
+            hero.elementTracker.applyBonusRewards(hero);
+            for (const bonus of newBonuses) {
+                EventBus.emit('floatingText', { gx: hero.gridX, gy: hero.gridY, msg: `★ ${bonus.name} fullført! ${bonus.desc}`, color: '#ffcc00', big: true });
+            }
+        }
+
+        Audio.playPickup();
+        this._refresh();
     }
 }

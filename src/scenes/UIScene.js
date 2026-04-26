@@ -103,11 +103,18 @@ class UIScene extends Phaser.Scene {
         this._minimapY     = H - 8;    // bottom-anchored
         this._minimapThrottle = 0;
 
-        // Toggle minimap with M key or touch button
+        // Toggle minimap with M key or tap on minimap area
         this._minimapVisible = true;
         this.input.keyboard.on('keydown-M', () => {
             this._toggleMinimap();
         });
+
+        if (this.game.registry.get('isTouchDevice')) {
+            const mapZoneSz = 80;
+            const mapZone = this.add.zone(W - 8 - mapZoneSz / 2, H - 8 - mapZoneSz / 2, mapZoneSz, mapZoneSz)
+                .setInteractive().setDepth(99);
+            mapZone.on('pointerdown', () => this._toggleMinimap());
+        }
 
         this.refresh();
     }
@@ -201,16 +208,17 @@ class UIScene extends Phaser.Scene {
             g.fillRect(px, py, sc, sc);
         }
 
-        // Minerals (tier-colored dots, requires Geologist skill)
-        if ((gs.hero.mineralVisionRadius || 0) > 0 && gs.itemObjects) {
+        // Minerals (tier-colored dots, requires Geologist skill or Element Scanner)
+        const hasScanner = gs.hero.techElementScanner;
+        if (((gs.hero.mineralVisionRadius || 0) > 0 || hasScanner) && gs.itemObjects) {
             for (const obj of gs.itemObjects) {
                 if (!obj.isMineral) continue;
-                if (gs.fog[obj.gridY] && gs.fog[obj.gridY][obj.gridX] === FOG.DARK) continue;
+                if (!hasScanner && gs.fog[obj.gridY] && gs.fog[obj.gridY][obj.gridX] === FOG.DARK) continue;
                 const px = mx + obj.gridX * sc;
                 const py = my + obj.gridY * sc;
                 const tierCol = (typeof MINERAL_TIER_COLORS !== 'undefined' && obj.item)
                     ? (MINERAL_TIER_COLORS[obj.item.tier] || 0x88ff88) : 0x88ff88;
-                g.fillStyle(tierCol, 0.8);
+                g.fillStyle(hasScanner ? 0x44ffaa : tierCol, 0.8);
                 g.fillRect(px, py, sc, sc);
             }
         }
@@ -221,6 +229,47 @@ class UIScene extends Phaser.Scene {
             const ppy = my + gs.pet.gridY * sc;
             g.fillStyle(0xffaadd);
             g.fillRect(ppx, ppy, sc, sc);
+        }
+
+        // Route calculator (BFS path to exit/boss)
+        if (gs.hero.techRouteCalc) {
+            const path = this._bfsPath(gs, gs.hero.gridX, gs.hero.gridY, gs.exitX, gs.exitY);
+            if (path) {
+                g.fillStyle(0x00ff88, 0.45);
+                for (const p of path) {
+                    g.fillRect(mx + p.x * sc, my + p.y * sc, sc, sc);
+                }
+            }
+        }
+
+        // Teleporter nodes (cyan dots)
+        if (gs.teleporterNodes) {
+            for (const n of gs.teleporterNodes) {
+                g.fillStyle(0x88ccff);
+                g.fillRect(mx + n.gx * sc, my + n.gy * sc, sc, sc);
+            }
+        }
+
+        // Laser turrets (blue dots)
+        if (gs.laserTurrets) {
+            for (const t of gs.laserTurrets) {
+                g.fillStyle(0x4488ff);
+                g.fillRect(mx + t.gx * sc, my + t.gy * sc, sc, sc);
+            }
+        }
+
+        // Special rooms (camp=orange, chem=green, accelerator=purple on lit/dim tiles)
+        if (gs._gen && gs._gen.specialRooms) {
+            const roomColors = { camp_room: 0xff7722, chem_lab: 0x33dd88, accelerator: 0x8866ff };
+            for (const room of gs._gen.specialRooms) {
+                const rc = roomColors[room.type];
+                if (!rc) continue;
+                for (const t of room.tiles) {
+                    if (!gs.fog[t.y] || gs.fog[t.y][t.x] === FOG.DARK) continue;
+                    g.fillStyle(rc, 0.6);
+                    g.fillRect(mx + t.x * sc, my + t.y * sc, sc, sc);
+                }
+            }
         }
 
         // Hero (bright white dot)
@@ -234,6 +283,40 @@ class UIScene extends Phaser.Scene {
         b.clear();
         b.lineStyle(1, 0x334466, 0.8);
         b.strokeRect(mx - 2, my - 2, mW + 4, mH + 4);
+    }
+
+    _bfsPath(gs, sx, sy, tx, ty) {
+        if (sx === tx && sy === ty) return [];
+        const W = gs.tileW, H = gs.tileH, maze = gs.maze;
+        const visited = Array.from({ length: H }, () => new Uint8Array(W));
+        const prev = Array.from({ length: H }, () => new Array(W).fill(null));
+        const queue = [{ x: sx, y: sy }];
+        visited[sy][sx] = 1;
+        const dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+        while (queue.length > 0) {
+            const { x, y } = queue.shift();
+            for (const [dx, dy] of dirs) {
+                const nx = x + dx, ny = y + dy;
+                if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+                if (visited[ny][nx]) continue;
+                const t = maze[ny][nx];
+                if (t === TILE.WALL || t === TILE.CRACKED_WALL) continue;
+                visited[ny][nx] = 1;
+                prev[ny][nx] = { x, y };
+                if (nx === tx && ny === ty) {
+                    const path = [];
+                    let cx = tx, cy = ty;
+                    while (cx !== sx || cy !== sy) {
+                        path.push({ x: cx, y: cy });
+                        const p = prev[cy][cx];
+                        cx = p.x; cy = p.y;
+                    }
+                    return path;
+                }
+                queue.push({ x: nx, y: ny });
+            }
+        }
+        return null;
     }
 
     // ── Main refresh (called every frame from update) ─────────────────────────
@@ -256,7 +339,7 @@ class UIScene extends Phaser.Scene {
             this._minimapThrottle = now;
             this._drawMinimap();
         }
-        // Touch minimap toggle
+        // Legacy touch minimap toggle (from registry)
         if (this.game.registry.get('touch_minimap')) {
             this.game.registry.set('touch_minimap', false);
             this._toggleMinimap();
@@ -292,12 +375,14 @@ class UIScene extends Phaser.Scene {
 
         // ── Labels ────────────────────────────────────────────────────────────
         const wn = this.gameScene.worldNum;
+        const ngPlus = hero.ngPlusLevel || 0;
+        const ngTag = ngPlus > 0 ? ` NG+${ngPlus}` : '';
         if (typeof getZone !== 'undefined') {
             const zone = getZone(wn);
             const floor = getZoneFloor(wn);
-            this.worldText.setText(`${zone.name} ${floor}/${zone.worlds.length}`);
+            this.worldText.setText(`${zone.name} ${floor}/${zone.worlds.length}${ngTag}`);
         } else {
-            this.worldText.setText(`Verden ${wn}`);
+            this.worldText.setText(`Verden ${wn}${ngTag}`);
         }
         this.levelText.setText(`Nivå ${hero.level}  XP ${hero.xp}/${hero.xpToNext}`);
         this.atkText.setText(`ATK ${hero.attack}  DEF ${hero.defense}  Syn ${hero.visionRadius}`);
@@ -354,6 +439,12 @@ class UIScene extends Phaser.Scene {
             const secs = Math.ceil((b.msLeft || 0) / 1000);
             effects.push(`+${b.amount} ${label} (${secs}s)`);
         }
+        if (hero.techForceFieldHP > 0) effects.push(`🛡 Felt ${hero.techForceFieldHP}`);
+        if (hero.techEMP && (hero.empCharges || 0) > 0) effects.push(`⚡ EMP ×${hero.empCharges} [G]`);
+        if (hero.techLaserTurret && (hero.laserTurretCharges || 0) > 0) effects.push(`🔫 Turret ×${hero.laserTurretCharges} [H]`);
+        if (hero.techTeleporter) effects.push(`📡 Tele [J]`);
+        if (hero.techRouteCalc) effects.push(`🗺 Rute`);
+        if (hero.techElementScanner) effects.push(`🔬 Skanner`);
         if (effects.length > 0) {
             this.statusText.setText(effects.join('  '));
             this.statusText.setVisible(true);
@@ -377,9 +468,9 @@ class UIScene extends Phaser.Scene {
             this.bossBar.setVisible(false);
         }
 
-        // ── Touch button visibility (unlock-gated) ───────────────────────────
-        if (this.touchControls) {
-            this.touchControls.updateVisibility(hero);
+        // ── Touch context button (update label/color based on hero location)
+        if (this.touchControls && this.gameScene) {
+            this.touchControls.updateContextButton(this.gameScene);
         }
     }
 }

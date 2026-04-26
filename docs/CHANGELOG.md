@@ -2,6 +2,281 @@
 
 ---
 
+## v0.48 – 2026-04-25
+
+### Nye funksjoner
+- **Mer variasjon mellom monstertyper (#128):** Hver monstertype har nå et eget oppførselsmønster i tillegg til ulike statistikker:
+  - **Goblin (erratisk):** Nøler tilfeldig (~18%) før den angriper – uforutsigbar bevegelse
+  - **Skjelett (bueskytter):** Skyter pil for halv skade når helten er på samme rad/kolonne (avstand 2–4) med fri sikt – angriper uten å bevege seg
+  - **Troll og Golem (treg):** Beveger seg kun annenhver tick – tunge motstandere som spilleren kan kite
+  - **Wraith (fasende):** Beveger seg gjennom vegger – kan ikke sperres inne i labyrintkorridorer
+  - **Demon (brennende):** 30% sjanse for å påføre 3-turns brann ved nærkampangrep
+  - Orker beholder sin gift-sjanse, bosser sine fase-2-mekanikker
+
+### Balanseendringer
+- **Bedre XP-skalering for høyere verdener (#128):** Monster-XP skaleres nå med `1 + 0.30·(verden−1) + 0.20·max(0, verden−8)`. Et monster i verden 25 gir ~11.6× XP sammenlignet med verden 1, slik at ferdighetsopplåsning følger den eksponentielle XP-kurven (`XP_GROWTH = 1.55`)
+- **Bosser skalerer nå XP med verden:** Vanlige bosser fikk tidligere flat 150 XP uavhengig av verden. Både `boss` og `zone_boss` ganges nå også med xpScale
+
+### Feilrettinger
+- **Elementbok: lantanoider plassert for langt fra aktinoider (#127):** Lantanoid-raden satt rett under hovedtabellen mens aktinoid-raden lå betydelig lenger ned. Begge radene er nå gruppert sammen med en liten luft til hovedtabellen, slik en standard periodisk tabell skal være. «Ln»/«An»-etiketter justert tilsvarende
+
+### Tekniske endringer
+- Monster.js: Nye oppførselsflagg `moveCadence`, `canPhase`, `isArcher`, `isErratic`, `burnsOnHit` og `tickCount`. Ny `xpScale`-formel anvendt på alle monstertyper inkludert bosser
+- MonsterManager.js: Tick-loopen respekterer `moveCadence` for trege monstre. `_moveMonster()` har egne grener for goblin-nøling, skjelett-bueskyting og wraith-faseflytting. Nye hjelpere `_hasClearShot()` og `_fireArrow()`
+- CombatManager.js: `monsterAttack()` påfører `applyBurn(3)` ved demonangrep
+- ElementBookScene.js: Lantanoid-/aktinoid-radoffset endret fra `row >= 8` til `row >= 7`, slik at lantanoidene (rad 7) også flyttes ned til 8.5 og aktinoidene (rad 8) til 9.5. «Ln»-etiketten flyttet fra y=9.5 til y=8.5
+
+---
+
+## v0.47 – 2026-04-25
+
+### Nye funksjoner
+- **Victory-scene ved 118 grunnstoffer:** Når spilleren samler alle 118 grunnstoffer trigges en episk victory-scene med fanfare, gullpartikler, mini periodisk tabell, og tittelen «Guds periodiske system». Victory kan trigges umiddelbart (i spill-scenen) eller ved verdensavslutning
+- **New Game+ (NG+):** Etter victory kan spilleren starte en ny reise med beholdte levels/skills/gull, men nullstilt elementsamling. Monstre skaleres +40% HP og +25% angrep per NG+-syklus
+- **Victory-badge i meny:** Spillere som har fullført spillet ser gull-badge «✦ Guds periodiske system» med NG+-nivå i hovedmenyen
+- **NG+-indikator i HUD:** Sonenavn viser NG+-syklus (f.eks. «Overflatelag 1/3 NG+1»)
+- **Victory-fanfare:** Ny prosedyregenerert lyd med stigende arpeggio og vedvarende akkord
+
+### Feilrettinger
+- **Transmutasjon trigget ikke elementbonuser (#bug):** ChemLabScene._doTransmute() manglet checkCompletions() etter transmutasjon — grunnstoffer oppdaget via transmutasjon kunne ikke trigge bonuser som «Guds periodiske system»
+- **Elementbok viste feil mål:** Endret fra «X/90» (kun naturlige) til «X/118» (alle grunnstoffer) for å reflektere spillets faktiske mål
+
+### Tekniske endringer
+- constants.js: Ny `FINAL_WORLD = 25` konstant
+- HeroCrafting: Nye felt `ngPlusLevel` og `victoryAchieved` med serialisering/deserialisering
+- ElementTracker: Emitter `elementBonusComplete` via EventBus ved bonus-fullføring
+- GameScene: Lytter på `elementBonusComplete` for umiddelbar victory-trigger; `_checkExit()` sjekker alle 118 samlet
+- GameOverScene: Ny `_gameCompleteScreen()` med sparkle-partikler, mini periodisk tabell, NG+-start
+- MonsterManager: NG+-skalering stacker med vanskelighetsgrad-multiplikatorer
+- AudioManager: Ny `playVictory()` metode
+
+---
+
+## v0.46 – 2026-04-19
+
+### Forbedringer
+- **Færre touch-knapper, kontekstsensitiv ÅPNE-knapp:** Menyknapper redusert fra 6 til 3 (INV, SKL, ÅPNE). ÅPNE-knappen endrer farge og label dynamisk basert på heltens plassering: BOK (elementbok) → SMI (leirplass) → LAB (kjemilab) → ACE (akselerator). Løser også manglende akselerator-knapp for mobil (#108)
+- **Minikart-toggle via trykk:** På touch-enheter kan minikartet nå toggles ved å trykke direkte på det, i stedet for en egen MAP-knapp
+
+### Tekniske endringer
+- TouchControls: Ny `_createContextButton()` og `updateContextButton(gameScene)` for dynamisk knapp. Fjernet `updateVisibility()` og individuelle menyknapper
+- GameScene: Ny `_handleTouchOpenContext()` erstatter individuelle touch-scene-handlinger. Tastaturkontroller (V, C, P, B) uendret
+- UIScene: Interaktiv sone over minikartet for touch-toggle. Kaller `updateContextButton()` i refresh
+
+---
+
+## v0.45 – 2026-04-18
+
+### Feilrettinger
+- **Scroll i menyer påvirket kamerazoom (#123):** Musehjul-scroll i overlay-scener (Smelteovn, Kjemilab, Inventar, Elementbok, Skilltre, Akselerator, Innstillinger) blokkerer nå zoom-endring i GameScene. Også lagt til AcceleratorScene i input-blokkeringen
+- **Skilltre-synergier overlappet med T4-skills (#115):** Synergy-seksjonen beregner nå posisjon dynamisk basert på faktisk antall tiers i stedet for hardkodet 3. T4-badge vises nå korrekt
+- **Potions fra kjemilab healte fullt (#121):** Redusert potionScale fra 0.4 til 0.15 per verden for mykere skalering. 25% maxHP-gulv gjelder nå kun T3+ potions. Fikset serialisering: molekyl-items i ryggsekk og quick-use gjenskaper nå `use()`-funksjonen korrekt ved innlasting
+
+### Nye funksjoner
+- **Grunnstoff-filtrering i Kjemilab (#109):** Klikkbare grunnstoff-ikoner øverst filtrerer oppskrifter etter ingrediens. Grunnstoffer man ikke har vises dimmet
+- **Egen Transmutasjon-tab i Kjemilab (#111):** Ny fane «Transmutasjon» med dedikert visning av alle tilgjengelige transmutasjoner, input → output og knapper. Kun synlig når transmutasjon er låst opp
+- **Større kjemilab-vindu (#117):** Kjemilab-panelet utvidet fra 760×600 til 960×720 for bedre oversikt
+
+### Balanseendringer
+- **Skilltre-synergier krever høyere tier (#116):** 6 av 12 synergier krever nå T2-skills fra begge stier i stedet for bare T1. Påvirkede synergier: Smiekunst, Alkymist, Giftjeger, Transmutasjon, Atomsmedja og Kvantekjemi. Tier-krav vises i synergi-oversikten
+
+### Tekniske endringer
+- InputHandler: Wheel-handler sjekker `scene.isActive()` for alle overlay-scener før zoom
+- GameScene: `blocked`-variabel inkluderer nå AcceleratorScene
+- SkillScene: `cardsEndY` beregnes fra `maxTiers` dynamisk, tier-badge bruker `'T' + (tierIndex + 1)`
+- skills.js: `getActiveSynergies()` sjekker `pathMaxTier` mot `syn.minTier` (default 1). 6 synergier har fått `minTier: 2`
+- ChemistrySystem: `potionScale` redusert (0.15/verden). 25% maxHP-gulv kun for `mol.tier >= 3`
+- Inventory: Deserialisering gjenskaper `_chemItem` via `ChemistrySystem._createUsableItem()` for molekyler i quickUse og backpack
+- ChemLabScene: Tab-system (Oppskrifter/Transmutasjon), grunnstoff-filterrad, større panel
+- **Partikkelakselerator spawner nå fra verden 13+ (#108):** Akselerator-rom plasseres nå før valgfrie rom (malmkammer, hydrotermisk, gasslomme, magmakammer) i prioritering, slik at dead-ends er tilgjengelige
+- **Lettere å finne basis-grunnstoffer i høyere verdener (#119):** 20% sjanse for å rulle tier 1-2 mineral uansett verdensnummer, sikrer tilgang til Al, Fe, Cu og andre viktige elementer
+- **Elementbok: lantanoider/aktinoider flyttet ned (#113):** Økt avstand (1.5 rader) mellom hovedtabellen og lantanoider/aktinoider. Lagt til «Ln»/«An»-etiketter. Gruppebonuser vises nå i flere rader
+- **Elementbok: viser raffinerte grunnstoffer (#120):** Tooltip viser nå antall rene/raffinerte former ved siden av rå-antallet (f.eks. «Lagret: 12 (3 ren)»)
+
+### Nye funksjoner (Sprint 4)
+- **Delvis bruk av energikilder (#112):** Ubrukt energi fra brensel lagres nå i en reserve (`fuelReserve`) som brukes ved neste crafting-operasjon. Kull (3 energi) brukt på 1-energi-oppskrift bevarer 2 energi til neste gang
+- **Smi nøkler og hakker (#122):** Nye smi-oppskrifter: Smidd nøkkel (bronse), Smidd hakke (stål). Viktige verktøy kan nå produseres i stedet for å finnes tilfeldig
+- **Forstørrelsesbelte – øk ryggsekk (#118):** Nytt smi-objekt fra skandium som gir +3 ryggsekk-plasser. Kan oppgraderes maks 2 ganger (totalt +6 plasser)
+- **Tooltip over mineraler i Lager (#110):** Hover over mineral i Lager-fanen viser tier og hvilke grunnstoffer det gir
+- **Tydelige meldinger ved gruppeprestasjoner (#114):** Element-gruppeprestasjoner og synergier vises nå med stor, tydelig tekst (★-merket) på spillskjermen. Gjelder for smelting, akselerator og mineral-oppsamling
+
+### Forbedringer (oppfølging)
+- **Partikkelakselerator synlig på kart og minikart:** Akselerator-rom har nå distinkt lilla sci-fi-dekorasjon med ringstruktur, energikjerne og partikkelspor. Spesialrom (leirplass, kjemilab, akselerator) vises nå med fargekodede markører på minikartet
+- **Jevnere mineralfordeling i høyere verdener:** Ny vektet fordeling: 15% 3 tier under, 20% 2 under, 20% 1 under, 35% aktuell tier, 10% tier over. Sikrer T1-T3 mineraler selv i verden 13+
+- **Grunnstoff-filtrering i Smelteovn:** Klikkbare grunnstoff-ikoner øverst i Smelt-, Legering- og Smi-faner filtrerer oppskrifter etter ingrediens-element. Samme layout som Kjemilaben
+
+### Tekniske endringer
+- MapRenderer: Ny `accelerator` case med lilla ringstruktur og metallvegger
+- UIScene: Minimap viser camp_room (oransje), chem_lab (grønn), accelerator (lilla) markører
+- minerals.js: `rollMineralTier()` redesignet med 5-trinn vektet fordeling i stedet for hard base-tier
+- SmelteryScene: Ny `_drawElementFilterRow()` med klikkbare grunnstoff-badges, element-filter på legerings-tab
+- maze.js: Akselerator-plassering flyttet opp i `_placeSpecialRooms()` prioritet
+- minerals.js: `rollMineralTier()` har 20% sjanse for basis-tier (1-2) fra verden 5+
+- ElementBookScene: `yOffset` for rows >= 8 økt til `+1.5`, lantanoid/aktinoid-labels, multi-rad bonuser, raffinert-telling i tooltip
+- SmeltingSystem: `fuelReserve` deduceres først i `consumeFuel()`, overskudd lagres tilbake. `calculateFuelEnergy()` inkluderer reserve
+- HeroCrafting: Nye felter `fuelReserve`, `_backpackUpgrades` med serialisering
+- alloys.js: Nye smi-oppskrifter `forged_key` (bronse), `forged_pickaxe` (stål), `backpack_upgrade` (skandium)
+- SmelteryScene: Mineral-tooltips med tier og yields i Lager-fanen
+- ItemSpawner/SmelteryScene/AcceleratorScene: Bonus-meldinger bruker `big: true` for tydeligere visning
+
+### Nye funksjoner (Sprint 5)
+- **Varierte gjenstandssprites (#124):** Potions (flaskeform), dynamitt (røde pinner med lunte), bomber (rund med lunte), syrer (boblende flaske). Både verdenskart og inventar-ikoner er oppdatert
+- **4 nye monstertyper (#125):** Skjelett (verden 4+, høy ATK), Golem (verden 6+, høy HP/lav ATK), Skygge (verden 8+, lilla, unnvikende), Demon (verden 10+, rød, brann). Hver type har unike prosedyregenererte sprites og tilpassede stats
+
+### Tekniske endringer (Sprint 5)
+- ItemGraphics: Nye `drawWorldIcon`/`drawInventoryIcon`-case for `_chemType` (potion, explosive, acid, medicine)
+- constants.js: 4 nye monster-entries i HP/ATK/COLOR/XP-tabellene
+- MonsterManager: `_monsterPool()` utvides til 11 verdener med gradvis innføring av nye monstre
+- MonsterGraphics: Nye `drawSkeleton`, `drawGolem`, `drawWraith`, `drawDemon` prosedyre-sprites
+- Monster.js: Switch-case og delegat-metoder for de 4 nye typene
+
+---
+
+## v0.44 – 2026-04-17
+
+### Nye funksjoner
+- **Alle 6 gameplay-teknologier er nå fullt implementert:**
+  - **Kraftfelt:** Absorberer opptil 15 skade per etasje. Regenererer automatisk ved ny etasje. Visuell indikator i HUD
+  - **EMP-pulsgenerator:** 1 ladning per etasje. Trykk G for å lamme alle monstre i 50 runder. Blå flash-effekt
+  - **Laserturret:** 2 ladninger per etasje. Trykk H for å plassere. Automatisk 4 skade/runde mot monstre innen 5 ruter. Laserstrål-animasjon
+  - **Teleporter-noder:** Trykk J for å plassere noder (maks 5). Stå på en node og trykk J for å teleportere til neste. Sirkulær navigering
+  - **Elementskanner:** Alle mineraler vises automatisk på minikartet (grønne prikker) uavhengig av tåke
+  - **Ruteberegner:** BFS-pathfinding viser optimal rute til exit som grønn sti på minikartet
+
+### Tekniske endringer
+- Hero.takeDamage: Kraftfelt-absorpsjon før HP-tap med flytende tekst
+- CombatManager: Nye `handleEMP`, `handlePlaceTurret`, `handleTeleporter`, `tickLaserTurrets` med laser-beam-animasjon
+- UIScene minimap: BFS pathfinding (`_bfsPath`), elementskanner-overlay, turret/teleporter-noder-visning
+- UIScene HUD: Tech-status-indikatorer (kraftfelt HP, EMP/turret-ladninger, teleporter, rute, skanner)
+- InputHandler: G/H/J hurtigtaster for EMP/turret/teleporter
+- GameScene: Teknologi-effekter initialiseres per etasje (kraftfelt regen, EMP/turret-ladninger)
+- HeroCrafting: `empCharges`, `laserTurretCharges` i init/serialize/applyStats
+- MonsterManager: Laserturret-tick integrert i monster-syklusen
+
+---
+
+## v0.43 – 2026-04-17
+
+### Nye funksjoner
+- **Halvleder-system med raffinering og teknologi:** Trestegs prosess: (1) Raffiner rå elementer til halvlederkvalitet (6 oppskrifter), (2) Kombiner raffinerte materialer til halvledere (6 typer, Si-wafer bruker Si+B+P-doping), (3) Installer permanente teknologier som låser opp nye mekanikker
+- **Ny «Raffiner»-fane i Smelteovn:** Konverterer rå elementer til ultra-rene varianter (f.eks. 5 Si → 1 Rent Si). Høy energikostnad. Viser raffinert lagerbeholdning
+- **10 permanente teknologi-oppgraderinger** via ny «Teknologi»-fane:
+  - Ruteberegner (Si): optimal rute til exit/boss/chest på minikartet
+  - Elementskanner (Ge): avslører alle elementer på etasjen
+  - Laserturret (GaAs): plasserbar automatisk turret (4 skade/runde)
+  - Teleporter-noder (ITO): plassér og teleportér fritt mellom rom
+  - EMP-puls (SiC): slår ut alle monstre i 50 runder
+  - Kraftfelt (CdTe): 15-skade energibarriere, regenererer mellom etasjer
+  - Solcellepanel (CdTe): +30 gratis energi per verden
+  - Termoelektrisk gen. (Ge): +50 energi i vulkan/magma-soner
+  - Reaktorkontroll (Si): +50% fisjon/fusjon-energieffektivitet
+  - Superleder-kabling (GaAs): -30% energikostnad på all smelting/crafting
+
+### Tekniske endringer
+- alloys.js: REFINING_RECIPES (6), redesignet SEMICONDUCTOR_DEFS (raffinerte inputs, Si+B+P), TECH_UPGRADES (10 stk). SEMICONDUCTOR_EQUIPMENT fjernet
+- SmeltingSystem: `canRefine/refine`, `canCraftSemiconductor/craftSemiconductor`, `canInstallTech/installTech`. Energiteknologier i `calculateFuelEnergy` og `_adjustedEnergyCost`
+- SmelteryScene: Nye «Raffiner» og «Teknologi»-faner. Halvleder-kode fjernet fra legering/smi
+- HeroCrafting: `refinedElements`, 10 tech-flagg, `teleporterNodes`, `techForceFieldHP`
+- Inventory: critBonus, dodgeBonus, regenBonus i `_apply`/`_unapply`
+
+---
+
+## v0.42 – 2026-04-16
+
+### Nye funksjoner
+- **Fase 5: Fysikk og transurane grunnstoffer** – Alle 118 grunnstoffer er nå i spillet. 28 syntetiske elementer (Tc, Pm, Np-Og) må produseres i partikkelakseleratoren
+- **Partikkelakselerator-rom:** Dukker opp fra verden 13 (20% sjanse), garantert fra verden 15. Åpnes med P-tast. Komplett UI med scrollbar, energikostnad og tier-gating
+- **Realistisk transuran syntese:** Hver oppskrift gjenspeiler ekte kjernefysikk – nøytronbombardering for Np/Pu, alfa-bombardering for Cm, tungione-bombardering for transaktinider, Ca-48 varmfusjon for supertunge (Fl-Og). Krever tilhørende input-grunnstoffer som forbrukes
+- **Fysiker-skillsti (6. sti):** T1 Halvledergrunnlag (halvledercrafting + mineraltiltrekning), T2 Strålingsshield (immunitet mot stråling + loot-bonus), T3 Fisjonsbeherskelse (2× energi fra U/Th, låser tier 1-3 syntetiske), T4 Fusjonspioner (5× energi fra He, låser alle syntetiske)
+- **Fisjon/fusjon-energi:** U gir 50 virtuell energi (×2 med Fisjon T3), Th gir 40. Fusjon bruker D-T-reaksjonen: H (deuterium, 80 energi) + Li (tritiumkilde via Li-6+nøytron, 150 energi), ×5 med Fusjon T4. He er biprodukt, ikke brensel. Gjør endgame-syntese gjennomførbar
+- **15 nye mineraler:** Vanadinitt (V – fikser uraftbar titanleger.), bromargyryt (Br), jodyritt (I), germanitt (Ge), stibnitt (Sb), gallitt (Ga), xenotim (Y+Dy+Er+Yb), samarskitt (Sm+Gd+Pr), celestin (Sr), pollucitt (Cs+Rb), calaveritt (Te+Au), inditt (In), thoritt (Th). PGM-malm gir nå også Pt, Ir og Os
+- **Edelgass-samling:** Gasslommer (verden 10+) gir nå 1-2 tilfeldige edelgasser (Ar/Kr/Xe/Ne/He) direkte i elementtrakeren
+- **Endgame: Guds periodiske system:** Samle alle 118 grunnstoffer gir +10 ATK, +10 DEF, +5 hjerter, +3 syn og tittelen «Guds periodiske system»
+- **Nye synergier:** Atomsmedja (Fysiker+Metallurg: +3 ATK, −25% akselerator-energi) og Kvantekjemi (Fysiker+Kjemiker: +30% potion, +20% bomberadius)
+
+### Feilrettinger
+- **Handelsmann NaN-pris:** Brenselprisen brukte `fuel.energy` (undefined) i stedet for `fuel.energyValue`. Naturgass viste «NaNg»
+
+### Tekniske endringer
+- elements.js: 118 elementer (90 naturlige + 28 syntetiske med `synthetic: true`). TRANSURANIC_RECIPES med 28 oppskrifter. Ny TOTAL_ALL_ELEMENTS-konstant. `all_92_natural`-bonus filtrerer nå ut syntetiske
+- minerals.js: 15 nye mineraler i MINERAL_DEFS og MINERAL_POOL
+- skills.js: Ny `fysiker`-sti med 4 tiers + `accelerator_found` unlockCondition + 2 nye synergier
+- AcceleratorScene.js: Komplett overlay-scene med scrolling, tier-gating, element-forbruk og energikostnad
+- SmeltingSystem: `calculateFuelEnergy()` legger nå til virtuell energi fra U/Th (fisjon) og He (fusjon)
+- ElementTracker: `applyBonusRewards()` støtter nå `godMode`-belønning
+- GameScene: Ny `_checkAccelerator()` + P-tast for å åpne akseleratoren
+- maze.js: Ny `accelerator`-romtype fra verden 13+
+- HeroCrafting: 10 nye hero-egenskaper for fysikerstate
+- ItemSpawner: Edelgass-samling fra gasslommer, fikset `fuel.energyValue`
+
+---
+
+## v0.41 – 2026-04-16
+
+### Nye funksjoner
+- **Forbedrede kjæledyr (#41):** Kjæledyrene har fått 60-80% mer basis-HP (Rev 8→14, Katt/Ugle 6→12, Drage 10→18) slik at de overlever lengre i kamp. Når kjæledyret dør øker eggsjansen på neste nivå fra 35% til 50% for å gjøre det lettere å få en ny kompanjong
+- **Kjæledyr-utstyr (#41):** Kjæledyrene har nå to utstyrsplasser (klo/våpen + rustning/halsbånd). 8 nye smidde gjenstander fra eksisterende legeringer: bronsekløer, ståltenner, wolframkløer, fosfortenner, bronsehalsbånd, stålsele, skandiumvest og titansele. Forges i Smi-fanen og utstyres automatisk på kjæledyret. Utstyr vises og håndteres i inventoret
+- **Kjæledyr-kjemi (#41):** 2 nye kjemiske oppskrifter for permanente kjæledyr-oppgraderinger: Kjæledyr-vitalitet (Ca+Fe+Mg) gir +3 permanent maks HP, og Vekst-elixir (La+Ca+P) gir +1 permanent angrep. Krever elements-mod-materialer
+- **Kjæledyr-utstyrspanel:** InventoryScene viser nå kjæledyrets utstyrsplasser med klo- og rustningsikon, samt utvidet stat-visning (inkludert DEF fra utstyr). Klikk for å fjerne utstyr tilbake til ryggsekken
+
+### Tekniske endringer
+- Pet.js: Ny `equipped` objekt med `weapon`/`armor` plasser; `effectiveAttack`/`effectiveMaxHp`/`effectiveDef` inkluderer utstyrsbonuser (`petAtk`/`petDef`/`petHp`). Nye `equipItem()`/`unequipItem()`-metoder. Serialisering/deserialisering inkluderer utstyr via PET_EQUIPMENT oppslag
+- alloys.js: Ny `PET_EQUIPMENT` konstant med 8 kjæledyr-gjenstander knyttes til eksisterende legeringer (bronse, stål, wolfram, fosfor, skandium, titan)
+- molecules.js: 2 nye kjæledyr-medisinoppskrifter (`pet_vitality`, `pet_growth`) med nye `onUse`-typer
+- ChemistrySystem: Nye `pet_permanent_hp` og `pet_permanent_atk` effekthandlere i `_createUsableItem()`
+- SmeltingSystem.getForgeableEquipment(): Returnerer nå PET_EQUIPMENT i tillegg til ALLOY_EQUIPMENT
+- SmelteryScene: Ny `_doPetForge()` – smir kjæledyr-utstyr og utstyrer det automatisk. Smi-fanen viser 🐾-merke på kjæledyr-gjenstander
+- InventoryScene: Ny `_makePetEquipSlot()` for utstyrsplasser; panelhøyde utvidet; stat-visning inkluderer DEF
+- ItemSpawner: Eggsjanse ved kjæledyr-død økt fra 35% til 50%
+
+---
+
+## v0.40 – 2026-04-15
+
+### Nye funksjoner
+- **Utvidet element-bruk (#99):** 2 nye mineraler (molybdenitt, barytt), **6 nye legeringer** (manganstål, molybdenstål, wolframkarbid, tantalplate, fosforkrystall, **skandiumlegering**) og 8 nye smidde utstyrsstykker (inkludert skandium-rapir og skandium-harnisk – romfartsinspirert lett rustning). 8 nye kjemikalier: sinkklorid-antiseptikum, bor-signalbombe, barium-fyrverkeri, thermittladning (25 skade, ignorer 4 Def), neodym-magnetbombe (22 skade, radius 5), wolfram-styrkedrikk, lantan-livselixir (+10 HP), plasmakjerne (30 skade med plasmakjede). Tidligere ubrukte grunnstoffer som Mn, W, Ta, Mo, Ba, Ce, La, Nd, Nd, B og Zn har nå praktisk nytte
+- **Bombeskade skalerer bedre i høyere verdener (#100):** Bombers verdensskala er økt fra +40% per verden til +60% per verden, pluss et flatt +2 skade per verden. Bomberadius får +1 fra verden 5 og +2 fra verden 8. Helbredelsespotions skalerer nå som 25% av maks HP fra verden 4+ så de forblir relevante. Syrebrenning varer +1 runde per 4 verdener
+- **Ny bombemekanikk: Def-penetrering og plasmakjede (#100):** Thermittladning ignorerer 4 Forsvar ved treff. Plasmakjerne kjeder til 2 nærmeste fiender utenfor radius for 50% skade. Motoren støtter disse via `defPierce`- og `chain`-felter i molekyldefinisjoner
+- **Skill-omarbeiding: Geolog, Metallurg, Kjemiker (#101):** Alle tre sti-er har fått økte tall og synlige effekter:
+  - **Geolog T2 Effektiv utvinning:** 25%/50%/75% sjanse per stack for **dobbelt** utbytte (tidligere +25% flat). Popup-tekst ved utløsning
+  - **Geolog T3 Mesterprospektør:** Garantert mineral oppgraderes til T5+ fra verden 5
+  - **NY Geolog T4 Geode-splitter:** Hvert 10. mineral smeltet gir en gratis ekstra grunnstoff-enhet
+  - **Metallurg T1 Rask smelting (maks stack):** Låser opp batch-smelting (×5) på minerallister
+  - **Metallurg T2 Legeringsmester:** +25% legerings-stats per stack (opp fra +15%)
+  - **Metallurg T3 Mestersmie:** +50% stats på smidd utstyr (opp fra +30%)
+  - **NY Metallurg T4 Reforge:** Ruller stats på utstyrt våpen/rustning på nytt for 5 energi i smie-fanen
+  - **Kjemiker T1 Potente potions:** +50% varighet *og* +25% styrke per stack (tidligere bare varighet)
+  - **Kjemiker T2 Syremestring:** +40% skade (opp fra +30%) og syrebomber reduserer fiendes Forsvar med 2
+  - **Kjemiker T3 Eksplosjonsgenial:** +50% skade, +1 radius *og* 60% «Dobbel brygging» på bombekrafting
+  - **NY Kjemiker T4 Volatil mestring:** Bomber kjeder til 1 ekstra fiende ved 50% skade
+- **Ny synergi: Transmutasjon (#101):** 3-sti-synergi (Geolog + Metallurg + Kjemiker). Låser opp konvertering av 5 av et grunnstoff → 1 av nabo (atomnummer ±1) i kjemilab via ↔-knapp på grunnstoff-merker. Hjelper med å bruke orphaned rare earths
+
+### Tekniske endringer
+- **CI-oppsett:** Ny `.github/workflows/ci.yml` kjører JS-syntaks-sjekk på alle filer samt nettleser-testsuiten (via headless Chromium + Playwright uten å legge til faste npm-avhengigheter). Ny `tests/ci-runner.js` fyrer opp en lokal statisk server, laster `test-runner.html`, og feiler jobben hvis noen tester feiler eller det er ukjente sidefeil. Noen allerede-ødelagte tester (`MINERAL_DEFS.copper_ore` → `chalcopyrite`, feil `chemistUnlocked`-forventning) er fikset som drive-by
+- ChemistrySystem: Separat `bombScale` vs `potionScale` med flat bombgulv (`+world*2`); ny `transmute()`-funksjon; støtte for `defPierce` og `chain` på bombedefinisjoner; syrebomber kan nå redusere fiendes Forsvar via `chemAcidDefShred`
+- SmeltingSystem.smelt() returnerer nå `doubled` og `geodeElement` for Geolog-effekter
+- Inventory._apply/_unapply støtter `visionBonus` på utstyr (brukt av nye fosforkrystall-våpen/-skjold)
+- skills.js: 3 nye T4-ferdigheter (Geode-splitter, Reforge, Volatil mestring); ny 3-sti synergy «Transmutasjon»
+- HeroCrafting: 13 nye hero-egenskaper for nye ferdigheter (doubleYieldChance, geodeSplitter, batchSmeltSize, reforgeUnlocked, potionMagnitudeBonus, chemAcidDefShred, chemDoubleBrewChance, chemBombChain, transmutationUnlocked, m.fl.) – alle med serialize/applyStats-støtte
+- SmelteryScene: Nytt `[ ×N ]`-batchknapp på smelt-fanen når maks-stack Rask smelting er nådd; ny Reforge-sekkjon øverst på Smi-fanen når Reforge er låst opp; Geolog-dobbelt-utbytte og Geode-drops vises som floating text
+- ChemLabScene: Transmutasjon-hint + ↔-knapp per grunnstoff-merke når synergien er aktiv; «Dobbel brygging» gir automatisk ekstra bombe i inventoryen
+
+---
+
+## v0.39 – 2026-04-15
+
+### Nye funksjoner
+- **Mindre og mer lesbare leir-/kjemi-paneler (#98):** SmelteryScene krymper fra nesten hele lerretet (W-20 × H-20) til et sentrert panel på maks 1080×680, og ChemLabScene utvider litt til 760×600 for å romme større fonter. Tittel, faner, knapper og listetekst har fått økt skriftstørrelse (12–14px → 14–18px) for bedre lesbarhet
+- **Drag-scrolling med mus og berøring (#98):** Begge scener støtter nå å scrolle ved å dra med musen eller med fingeren i tillegg til musehjulet. En 8px-terskel sørger for at korte klikk fortsatt utløser knapper
+- **Scrollbar-indikator (#98):** Tynn vertikal scrollbar på høyre side av innholdsområdet viser nåværende posisjon og scroll-rekkevidde. Scroll-offset klampes automatisk til innholdets høyde slik at over-scrolling er umulig
+
+### Tekniske endringer
+- SmelteryScene: Ny `_clampScroll()`, `_viewportHeight()` og `_maxScrolls` per fane. Hver `_draw*Tab()` setter `_contentEndY` som brukes i `_refresh()` til å beregne maks scroll og tegne scrollbar-tommel
+- ChemLabScene: Samme mønster for en enkelt `_scrollOffset`/`_maxScroll`. Panelet har også fått litt større karakter-portrett (120 → 130px)
+- Felles input-mønster: `pointerdown`/`pointermove`/`pointerup` på scene-input med drag-threshold, eksisterer side om side med eksisterende `wheel`-handler
+
+---
+
 ## v0.38 – 2026-04-13
 
 ### Nye funksjoner

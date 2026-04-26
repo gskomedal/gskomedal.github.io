@@ -1,6 +1,6 @@
 # Labyrint Hero – Game Design Document
-**Versjon:** 0.38
-**Sist oppdatert:** 2026-04-13
+**Versjon:** 0.47
+**Sist oppdatert:** 2026-04-25 (v0.48)
 
 ---
 
@@ -150,11 +150,16 @@ Heltens grunnstats gjør at verden 1 er farlig uten noe utstyr. Utstyr og evner 
 | SPACE / F / Angrepsknapp (touch) | Angrip i sett retning (eller nærmeste monster) |
 | R / Bueknapp (touch) | Skyt pil (krever bue utstyrt) |
 | Q / USE-knapp (touch) | Bruk første consumable i ryggsekken (bombe, drikk, etc.) |
-| E / Inventarknapp (touch) | Åpne/lukk inventory |
-| T | Vis ferdighetstre (kun visning) |
+| E / INV-knapp (touch) | Åpne/lukk inventory |
+| T / SKL-knapp (touch) | Vis ferdighetstre (kun visning) |
 | ESC | Lukk overlay |
-| +/- eller muskjul | Zoom inn/ut |
-| M / Minikartknapp (touch) | Vis/skjul minikart |
+| +/- eller mushjul | Zoom inn/ut |
+| M / trykk på minikart (touch) | Vis/skjul minikart |
+| V | Åpne smelteovn (i leirplass) |
+| C | Åpne kjemilab (i kjemilab) |
+| P | Åpne akselerator (i akselerator) |
+| B | Åpne elementbok |
+| ÅPNE-knapp (touch) | Kontekstsensitiv: åpner smelteovn/kjemilab/akselerator basert på plassering, ellers elementbok |
 | ⚙ (HUD) | Åpne lydinnstillinger |
 | Langt trykk (touch) | Slipp gjenstand i inventory (erstatter høyreklikk) |
 
@@ -163,15 +168,29 @@ Heltens grunnstats gjør at verden 1 er farlig uten noe utstyr. Utstyr og evner 
 - **Monsterangrep:** `attack + 30% sjanse: +1`
 - **Forsvar:** trekkes fra innkommende skade, minimum 1
 
-### Monstere (v0.35 balanse)
-| Type | Base-HP | Base-ATK | XP | HP-skala | ATK-skala |
-|------|---------|----------|-----|----------|-----------|
-| Goblin | 10 | 2 | 10 | +35% per verden (+15% ekstra etter V8) | +20% per verden (+8% ekstra etter V8) |
-| Orc | 18 | 4 | 25 | +35% per verden (+15% ekstra etter V8) | +20% per verden (+8% ekstra etter V8) |
-| Troll | 30 | 6 | 50 | +35% per verden (+15% ekstra etter V8) | +20% per verden (+8% ekstra etter V8) |
-| Boss | 50 + V×35 | 3 + V×2 | 150 | – (eget uttrykk) | – (570ms tick) |
+### Monstere (v0.48 balanse)
+| Type | Base-HP | Base-ATK | XP | HP-skala | ATK-skala | Spesialoppførsel |
+|------|---------|----------|-----|----------|-----------|------------------|
+| Goblin | 10 | 2 | 10 | +35% per verden (+15% ekstra etter V8) | +20% per verden (+8% ekstra etter V8) | Erratisk: ~18% sjanse for å nøle |
+| Orc | 18 | 4 | 25 | +35% per verden (+15% ekstra etter V8) | +20% per verden (+8% ekstra etter V8) | Gift-bett: 20% gift på treff |
+| Troll | 30 | 6 | 50 | +35% per verden (+15% ekstra etter V8) | +20% per verden (+8% ekstra etter V8) | Treg: handler hver 2. tick · 30% gift |
+| Skjelett | 12 | 5 | 20 | +35%/V (+15% etter V8) | +20%/V (+8% etter V8) | Bueskytter: skyter pil (½ skade) på avstand 2–4 med fri sikt |
+| Golem | 40 | 3 | 60 | +35%/V (+15% etter V8) | +20%/V (+8% etter V8) | Treg: handler hver 2. tick |
+| Wraith | 15 | 6 | 40 | +35%/V (+15% etter V8) | +20%/V (+8% etter V8) | Fasende: kan bevege seg gjennom vegger |
+| Demon | 25 | 7 | 55 | +35%/V (+15% etter V8) | +20%/V (+8% etter V8) | 30% sjanse for å påføre brann (3 runder) på treff |
+| Boss | 50 + V×35 | 3 + V×2 | 150 × xpScale | – (eget uttrykk) | – (570ms tick) | Fase 2 ved ≤50% HP, 15% lamming i fase 2 |
+| Sone-boss | 80 + V×50 | 5 + V×3 | (300 + V×50) × xpScale | – (eget uttrykk) | – | Fase 2 + forsvar V×0.5 |
 
 Helten starter med 3 base-angrep. Verdensnummer V brukes til å skalere både HP og skade. Skalering er mykere tidlig og hardere sent for å bevare utfordringen.
+
+### XP-skalering per verden (v0.48)
+For å holde tritt med den eksponentielle XP-kurven (`XP_BASE = 100`, `XP_GROWTH = 1.55`) skaleres alle monsters XP-belønning etter verden:
+
+```
+xpScale = 1 + 0.30·(V−1) + 0.20·max(0, V−8)
+```
+
+Dette gir ~2.2× i V5, ~4.0× i V10, ~6.8× i V15, ~9.0× i V20 og ~11.6× i V25 — slik at ferdighetsopplåsning føles meningsfull også i sene verdener. Bossens XP skaleres nå også med xpScale (tidligere flat 150 XP uavhengig av verden).
 
 ### Vanskelighetsgrader (v0.35)
 | Innstilling | Monster HP | Monster ATK | XP-bonus | Felle-skade |
@@ -187,7 +206,7 @@ Bevegelse inn i monster-rute: helten setter facing uten å angripe (visuell flas
 | Effekt | Ikon | Varighet | Skade | Kilde | Kur |
 |--------|------|----------|-------|-------|-----|
 | Gift | ☠ | 4 runder | 1/2.5s | Orc (20%), Troll (30%) | Motgift, Krystallresistans |
-| Brann | 🔥 | 3 runder | 2/2.0s | Vulkandungeon-monstre (20%) | Brannsalve, Motgift, Krystallresistans |
+| Brann | 🔥 | 3 runder | 2/2.0s | Vulkandungeon-monstre (20%), Demon (30%) | Brannsalve, Motgift, Krystallresistans |
 | Frostbitt | ❄ | 4 runder | Ingen (halv fart) | Iskrystall-monstre (25%) | Frostsalve, Motgift |
 | Lammet | ⚡ | 1 runde | Ingen (skip turn) | Boss fase 2 (15%) | Venter ut |
 
@@ -306,18 +325,18 @@ Livspotte, Stor livspotte, Styrkebrygg (midlertidig +ATK i 60 sek, skalerer med 
 - **Kjemiker** (lås: finn kjemisk lab) – potion-varighet, bombeskade, eksplosjonsradius. **Kreves for å lage kjemikalier.**
 
 ### Synergier
-Aktiveres automatisk når helten har evner fra begge stier i et par:
-| Synergi | Stier | Effekt |
-|---------|-------|--------|
-| Motangrep | Kriger + Villmarksjeger | 20% motangrep |
-| Tornehud | Kriger + Villmarksjeger | 1 tornskade, +1 syn |
-| Jordens kraft | Geolog + Kriger | +1 DEF, +1 mineral-syn |
-| Smiekunst | Metallurg + Kriger | +3 ATK, +20% malmeffekt |
-| Malmkjenne | Metallurg + Geolog | +1 mineral-syn, -10% smeltetid |
-| Giftklinger | Kjemiker + Kriger | +2 ATK, 15% gift |
-| Alkymist | Kjemiker + Metallurg | +20% potens, -15% energi |
-| Naturkjenner | Geolog + Villmarksjeger | +1 mineral-syn, +2 kjæl.-HP |
-| Giftjeger | Kjemiker + Villmarksjeger | +20% kjemibombe, +10% krit |
+Aktiveres automatisk når helten har evner fra begge stier i et par. Noen synergier krever høyere tier (T2) for å aktiveres:
+| Synergi | Stier | Min. tier | Effekt |
+|---------|-------|-----------|--------|
+| Motangrep | Kriger + Villmarksjeger | T1 | 20% motangrep |
+| Tornehud | Kriger + Villmarksjeger | T1 | 1 tornskade, +1 syn |
+| Jordens kraft | Geolog + Kriger | T1 | +1 DEF, +1 mineral-syn |
+| Smiekunst | Metallurg + Kriger | T2 | +3 ATK, +20% malmeffekt |
+| Malmkjenne | Metallurg + Geolog | T1 | +1 mineral-syn, -10% smeltetid |
+| Giftklinger | Kjemiker + Kriger | T1 | +2 ATK, 15% gift |
+| Alkymist | Kjemiker + Metallurg | T2 | +20% potens, -15% energi |
+| Naturkjenner | Geolog + Villmarksjeger | T1 | +1 mineral-syn, +2 kjæl.-HP |
+| Giftjeger | Kjemiker + Villmarksjeger | T2 | +20% kjemibombe, +10% krit |
 
 ---
 
@@ -426,7 +445,7 @@ Serveren avviser umulige poengsummer:
 | Butikk / handelsmann | ✅ Ferdig | Handelsmann-NPC i hver labyrint |
 | Gull + økonomi | ✅ Ferdig | Gullvaluta fra monstre/kister; handelsmann |
 | Gjenstandssjeldenhet | ✅ Ferdig | 5 sjeldenhetsgrader med stat-boost |
-| Touch/mobil-støtte | ✅ Ferdig | D-pad, handlingsknapper, responsiv skalering, langt-trykk drop |
+| Touch/mobil-støtte | ✅ Ferdig | D-pad, 3 handlingsknapper (ATK/BOW/USE), 3 menyknapper (INV/SKL/kontekstsensitiv ÅPNE), minikart-trykk-toggle, responsiv skalering, langt-trykk drop |
 | Leaderboard | ✅ Ferdig | Lokal + global ledertavle med filtrering, mineraler samlet, elementer oppdaget |
 
 ---
@@ -515,7 +534,7 @@ Synergi: **Jordens kraft** (Geolog + Vokter) → +1 forsvar, +1 mineralsynsradiu
 
 Smelting, legeringer og smiing av utstyr.
 
-**Leirplass (Camp Room):** Garantert fra verden 2+, 50% sjanse i verden 1. Trygg sone med smelteovn og **persistent lager (stash)** der spilleren kan lagre mineraler, brensel og andre ressurser mellom besøk. Frigjør ryggsekken for kamp. Åpnes med V-tast. Visuelt tema med bål, telt, trær, stjernehimmel og røyk. Panelet bruker nesten full skjermstørrelse. Alle faner støtter scrolling med musehjul, og grunnstoff-merker er klikkbare for å filtrere minerallisten etter element.
+**Leirplass (Camp Room):** Garantert fra verden 2+, 50% sjanse i verden 1. Trygg sone med smelteovn og **persistent lager (stash)** der spilleren kan lagre mineraler, brensel og andre ressurser mellom besøk. Frigjør ryggsekken for kamp. Åpnes med V-tast. Visuelt tema med bål, telt, trær, stjernehimmel og røyk. Panelet er sentrert med luft rundt kanten (opptil 1080×680) og har større fonter for lesbarhet. Alle faner støtter scrolling med musehjul, drag med mus og drag med finger (touch), og en scrollbar-tommel viser posisjonen. Grunnstoff-merker er klikkbare for å filtrere minerallisten etter element.
 
 **Smelting:** Mineraler + brensel → rene grunnstoffer. Brensel (tre=1, kull=3 energi) spawner i labyrinten.
 
@@ -527,15 +546,16 @@ Smelting, legeringer og smiing av utstyr.
 Låses opp ved første besøk i leirplass. **Minst én Metallurg-skill kreves for å bruke smelting, legering og smiing.** Lager-fanen er alltid tilgjengelig.
 | Tier | Skill | Effekt |
 |------|-------|--------|
-| T1 | Rask smelting | -25% energi/smeltetid, +15% sjanse ekstra utbytte per stack (maks 3) |
-| T2 | Legeringsmester | +15% legering-stats, 20% sjanse for dobbel legering per stack (maks 2) |
-| T3 | Mestersmie | +30% stats på smidd utstyr, spesialegenskaper (våpen: +10% krit, rustning: +1 torneskade) (maks 1) |
+| T1 | Rask smelting | -25% energi/smeltetid, +15% sjanse ekstra utbytte per stack (maks 3). Ved maks-stack låses batch-smelting (×5) opp |
+| T2 | Legeringsmester | +25% legering-stats, 20% sjanse for dobbel legering per stack (maks 2) |
+| T3 | Mestersmie | +50% stats på smidd utstyr, spesialegenskaper (våpen: +10% krit, rustning: +1 torneskade) (maks 1) |
+| T4 | Reforge | Ruller stats på utstyrt våpen/rustning på nytt for 5 energi i smie-fanen (maks 1) |
 
 ### Fase 3: Kjemi (v0.25)
 
 Kjemisk syntese av potions, bomber, medisiner og syrer fra rene grunnstoffer.
 
-**Kjemisk laboratorium:** Spesialrom fra verden 3+ med grønn glød. Åpnes med C-tast. Filterbare oppskrifter etter kategori. Visuelt tema med labbenk, hyller med flasker, erlenmeyerkolber, reagensrør, periodisk tabell-hint og bobler. Karakterportrett i nedre høyre hjørne.
+**Kjemisk laboratorium:** Spesialrom fra verden 3+ med grønn glød. Åpnes med C-tast. Filterbare oppskrifter etter kategori. Visuelt tema med labbenk, hyller med flasker, erlenmeyerkolber, reagensrør, periodisk tabell-hint og bobler. Karakterportrett i nedre høyre hjørne. Panelet (760×600) har større fonter og støtter scrolling via musehjul, drag (mus eller finger) og en synlig scrollbar-tommel.
 
 **Produkter:** 15 kjemiske produkter i 5 kategorier. Kraftigere enn vanlige consumables – kjemisk livselixir healer 4 HP (vs 2), krutt gjør 8 skade i radius 3 (vs 6 for vanlig bombe), dynamitt 15 skade.
 
@@ -543,9 +563,20 @@ Kjemisk syntese av potions, bomber, medisiner og syrer fra rene grunnstoffer.
 Låses opp ved første besøk i kjemisk laboratorium. **Minst én Kjemiker-skill kreves for å lage kjemikalier.**
 | Tier | Skill | Effekt |
 |------|-------|--------|
-| T1 | Potente potions | +50% potion-varighet per stack (maks 3) |
-| T2 | Syremestring | +30% kjemisk bombe-skade per stack (maks 2) |
-| T3 | Eksplosjonsgenial | +50% skade, +1 radius på bomber (maks 1) |
+| T1 | Potente potions | +50% varighet og +25% styrke på potions per stack (maks 3) |
+| T2 | Syremestring | +40% kjemisk bombe-skade per stack, syrebomber reduserer fiende-Def med 2 (maks 2) |
+| T3 | Eksplosjonsgenial | +50% skade, +1 radius, 60% «Dobbel brygging» på bombekrafting (maks 1) |
+| T4 | Volatil mestring | Bomber kjeder til 1 nærliggende fiende ved 50% skade (maks 1) |
+
+**Geolog-skillsti (#7) oppdaterte tier:**
+| Tier | Skill | Effekt |
+|------|-------|--------|
+| T1 | Malmøye | +1 mineral-syn, identifiser mineraler, merker på minikart (maks 3) |
+| T2 | Effektiv utvinning | 25%/50%/75% sjanse for dobbelt utbytte per stack, +1 bonus-element ved smelting (maks 3) |
+| T3 | Mesterprospektør | Garantert T4+ mineral per etasje; T5+ fra verden 5 (maks 1) |
+| T4 | Geode-splitter | Hvert 10. mineral smeltet gir en gratis ekstra grunnstoff-enhet (maks 1) |
+
+**Ny 3-sti-synergi Transmutasjon:** Krever ≥1 skill fra Geolog, Metallurg og Kjemiker. Låser opp konvertering av 5 av et grunnstoff → 1 av nabo (atomnummer ±1) via ↔-knapp på grunnstoff-merker i kjemilab.
 
 ### Fase 4: Verdensekspansjon (v0.26)
 
@@ -564,8 +595,86 @@ Spillet utvides fra 7 verdener til 25 etasjer fordelt på 5 geologiske soner.
 
 **Nye spesialrom:** Malmkammer (5+), Hydrotermalkilde (8+), Gasslomme (10+), Magmakammer (18+).
 
-### Fremtidige faser (ikke implementert)
-- Fase 5: Fysikk og endgame (halvledere, fisjon, fusjon)
+### Fase 5: Fysikk og transurane grunnstoffer (v0.42)
+
+Avansert kjernefysikk, syntetiske grunnstoffer og endgame-mål.
+
+**Alle 118 grunnstoffer:** 90 naturlige finnes via mineraler og gasslommer. 28 syntetiske (Tc, Pm, Np–Og) må produseres i partikkelakseleratoren. Oppskriftene gjenspeiler ekte kjernefysikk.
+
+**Partikkelakselerator:** Spesialrom fra verden 13+ (garantert verden 15+). Åpnes med P-tast. Scrollbart UI med alle 28 transuranske synteseoppskrifter. Forbruker mål-element + prosjektil-element + energi. Tier-gating: tier 1–3 krever Fisjon-skill, tier 4–6 krever Fusjon-skill.
+
+**Transuransk syntese (28 oppskrifter):**
+| Metode | Eksempel | Tier |
+|--------|----------|------|
+| Nøytronbombardering | U + nøytron → Np, Pu | 1 |
+| Alfa-bombardering (He-4) | Pu + He → Cm | 2–3 |
+| Tungione-kollisjoner | Bi + Cr → Bh, Pb + Fe → Hs | 4–5 |
+| Ca-48 varmfusjon | Cf + Ca → Og (2000 energi!) | 6 |
+
+**Fisjon/fusjon-energi:**
+- Fisjon: Hvert U i elementtrakeren gir 50 virtuell energi (×2 med Fysiker T3), Th gir 40.
+- Fusjon (D-T): H (deuterium) gir 80 energi, Li (tritiumkilde via Li-6 + nøytron → tritium) gir 150 energi, ×5 med Fysiker T4. He er biprodukt, ikke brensel.
+
+**Fysiker-skillsti:**
+Låses opp ved første besøk i partikkelakselerator. Krever ≥1 Kjemiker-skill.
+| Tier | Skill | Effekt |
+|------|-------|--------|
+| T1 | Halvledergrunnlag | Halvleder-crafting, +1 mineral-tiltrekningsradius per stack (maks 3) |
+| T2 | Strålingsshield | Radioaktive gir ikke HP-tap, +1 min loot-tier per stack (maks 2) |
+| T3 | Fisjonsbeherskelse | 2× reaktor-energi fra U/Th, låser tier 1–3 syntetiske (maks 1) |
+| T4 | Fusjonspioner | 5× fusjonsenergi fra H+Li, låser ALLE syntetiske inkl. supertunge (maks 1) |
+
+**Nye synergier:**
+| Synergi | Stier | Effekt |
+|---------|-------|--------|
+| Atomsmedja | Fysiker + Metallurg | +3 ATK, −25% akselerator-energi |
+| Kvantekjemi | Fysiker + Kjemiker | +30% potion-styrke, +20% bomberadius |
+
+**Edelgass-samling:** Gasslommer (verden 10+) gir 1–2 tilfeldige edelgasser (Ar, Kr, Xe, Ne, He) direkte i elementtrakeren.
+
+**Endgame:** Samle alle 118 grunnstoffer utløser «Guds periodiske system» – +10 ATK, +10 DEF, +5 hjerter, +3 synsfelt. Ved fullføring vises en episk victory-scene med fanfare, gullpartikler og mini periodisk tabell. Spilleren tilbys **New Game+** som nullstiller elementsamlingen men beholder nivå, skills og gull. Monstre skaleres +40% HP / +25% ATK per NG+-syklus. Elementbok viser fremgang mot 118 (ikke 90).
+
+### Halvleder-system (v0.43)
+
+Halvledere er teknologiplattformen som låser opp helt nye spillmekanikker i endgame. Tre-stegs prosess:
+
+**Steg 1 – Raffinering** (ny «Raffiner»-fane i Smelteovn, krever Fysiker T1):
+Konverterer rå elementer til halvlederkvalitet. Høy energikostnad.
+
+| Raffinert materiale | Input | Energi |
+|---------------------|-------|--------|
+| Rent Si (99.999%) | 5 Si | 10 |
+| Rent Ge | 3 Ge | 15 |
+| Rent GaAs | 2 Ga + 2 As | 20 |
+| Rent ITO | 2 In + 2 Sn | 15 |
+| Rent SiC | 3 Si + 2 C | 12 |
+| Rent CdTe | 2 Cd + 2 Te | 20 |
+
+**Steg 2 – Halvleder-crafting** (oppskrifter krever raffinerte materialer):
+
+| Halvleder | Oppskrift | Tier |
+|-----------|-----------|------|
+| Silisiumskive | Rent Si + B + P (doping) | 3 |
+| Silisiumkarbid | 2× Rent SiC | 3 |
+| Germaniumkrystall | Rent Ge + Rent Si | 4 |
+| Galliumarsenid | 2× Rent GaAs | 4 |
+| Indiumtinnoksid | 2× Rent ITO | 4 |
+| Kadmiumtellurid | 2× Rent CdTe | 5 |
+
+**Steg 3 – Teknologi-installasjon** (ny «Teknologi»-fane, permanent engangscrafting):
+
+| Teknologi | Halvleder-input | Ny mekanikk |
+|-----------|----------------|-------------|
+| Ruteberegner | Si-wafer | BFS-pathfinding viser optimal rute til exit som grønn sti på minikartet. Alltid aktiv |
+| Elementskanner | Ge-krystall | Alle mineraler vises på minikartet (grønne prikker) uavhengig av tåke |
+| Laserturret | GaAs | 2 ladninger/etasje. [H] plasserer turret. 4 skade/runde automatisk mot monstre innen 5 ruter |
+| Teleporter-noder | ITO | [J] plasserer noder (maks 5). Stå på node + [J] teleporterer til neste node |
+| EMP-puls | SiC | 1 ladning/etasje. [G] lammer ALLE monstre i 50 runder |
+| Kraftfelt | CdTe | Absorberer 15 skade. Regenererer til 15 HP ved ny etasje |
+| Solcellepanel | CdTe | +30 gratis energi per verden |
+| Termoelektrisk gen. | Ge | +50 energi i vulkan/magma-soner |
+| Reaktorkontroll | Si-wafer | +50% fisjon/fusjon-energi |
+| Superleder-kabling | GaAs | -30% energikostnad all smelting/crafting |
 
 Se `docs/Elements-mod.md` for fullstendig designdokument.
 

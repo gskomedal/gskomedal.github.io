@@ -246,6 +246,10 @@ class Inventory {
         if (item.hearts) {
             hero.maxHearts += item.hearts;
         }
+        if (item.visionBonus) hero.visionRadius += item.visionBonus;
+        if (item.critBonus) hero.critChance = Math.min(0.75, hero.critChance + item.critBonus);
+        if (item.dodgeBonus) hero.dodgeChance = Math.min(0.6, hero.dodgeChance + item.dodgeBonus);
+        if (item.regenBonus) hero.equipRegenHP = (hero.equipRegenHP || 0) + 1;
     }
 
     _unapply(item, hero) {
@@ -255,6 +259,10 @@ class Inventory {
             hero.maxHearts  -= item.hearts;
             hero.hearts      = Math.min(hero.hearts, hero.maxHearts);
         }
+        if (item.visionBonus) hero.visionRadius -= item.visionBonus;
+        if (item.critBonus) hero.critChance = Math.max(0, hero.critChance - item.critBonus);
+        if (item.dodgeBonus) hero.dodgeChance = Math.max(0, hero.dodgeChance - item.dodgeBonus);
+        if (item.regenBonus) hero.equipRegenHP = Math.max(0, (hero.equipRegenHP || 0) - 1);
     }
 
     // ── Serialisation ─────────────────────────────────────────────────────────
@@ -337,9 +345,15 @@ class Inventory {
             }
         });
 
-        // Restore quick-use slot
-        if (data.quickUse && data.quickUse.id && ITEM_DEFS[data.quickUse.id]) {
-            inv.quickUse = { id: data.quickUse.id, count: data.quickUse.count || 1 };
+        // Restore quick-use slot (check both standard and molecule defs)
+        if (data.quickUse && data.quickUse.id) {
+            if (ITEM_DEFS[data.quickUse.id]) {
+                inv.quickUse = { id: data.quickUse.id, count: data.quickUse.count || 1 };
+            } else if (typeof MOLECULE_DEFS !== 'undefined' && MOLECULE_DEFS[data.quickUse.id]) {
+                const chemSys = new ChemistrySystem();
+                const chemItem = chemSys._createUsableItem(MOLECULE_DEFS[data.quickUse.id], hero, hero.worldNum || 1);
+                inv.quickUse = { id: data.quickUse.id, count: data.quickUse.count || 1, _chemItem: chemItem };
+            }
         }
 
         // Restore backpack (supports old format [id], new [{id, count}], and rarity [{id, rarity}])
@@ -361,7 +375,9 @@ class Inventory {
                     } else if (entry.isFuel && typeof FUEL_DEFS !== 'undefined' && FUEL_DEFS[entry.id]) {
                         inv.backpack[i] = { id: entry.id, count: entry.count || 1 };
                     } else if (entry.isMolecule && typeof MOLECULE_DEFS !== 'undefined' && MOLECULE_DEFS[entry.id]) {
-                        inv.backpack[i] = { id: entry.id, count: entry.count || 1 };
+                        const chemSys = new ChemistrySystem();
+                        const chemItem = chemSys._createUsableItem(MOLECULE_DEFS[entry.id], hero, hero.worldNum || 1);
+                        inv.backpack[i] = { id: entry.id, count: entry.count || 1, _chemItem: chemItem };
                     } else if (lookupDef(entry.id)) {
                         if (entry.count !== undefined) {
                             // Stacked consumable/tool

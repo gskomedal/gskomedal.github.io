@@ -12,8 +12,13 @@ const HeroCrafting = {
         hero.mineralVisionRadius = 0;
         hero.mineralIdentifyLevel = 0;
         hero.miningYieldBonus = 0;
+        hero.doubleYieldChance = 0;       // Geolog T2: double-yield chance per stack
         hero.smeltBonusElement = 0;
         hero.guaranteedRareMineral = false;
+        hero.prospectorHighTier = false;  // Geolog T3 world 5+ upgrade
+        hero.mineralMinimap = false;      // Geolog T1: mineral dots on minimap
+        hero.geodeSplitter = false;       // Geolog T4: gemstone every 10 smelts
+        hero.smeltCountForGeode = 0;
         hero.mineralsCollected = 0;
         hero.totalPlayTime = 0; // cumulative seconds across all worlds
 
@@ -26,6 +31,9 @@ const HeroCrafting = {
         hero.alloyStatBonus = 0;
         hero.oreEfficiencyChance = 0;
         hero.doubleAlloyChance = 0;
+        hero.fastSmeltStacks = 0;      // Metallurg T1 stack count
+        hero.batchSmeltSize = 1;       // Metallurg T1 max-stack: batch-smelt amount
+        hero.reforgeUnlocked = false;  // Metallurg T4: reforge action
         hero.alloyInventory = {};
 
         // Chemistry mod (Phase 3)
@@ -33,12 +41,50 @@ const HeroCrafting = {
         hero.chemLabUnlocked = false;
         hero.potionDurationBonus = 0;
         hero.potionPotencyBonus = 0;
+        hero.potionMagnitudeBonus = 0;     // Kjemiker T1: potion stat-size buff
         hero.chemBombBonus = 0;
         hero.chemRadiusBonus = 0;
+        hero.chemAcidDefShred = 0;         // Kjemiker T2: acid bomb -Def on hit
+        hero.chemDoubleBrewChance = 0;     // Kjemiker T3: 2-for-1 bomb craft chance
+        hero.chemBombChain = false;        // Kjemiker T4: bomb chain to 1 extra
+        hero.transmutationUnlocked = false; // Transmutasjon synergy (3-path)
         hero.toxicBladeChance = 0;
+
+        // Physicist mod (Phase 5)
+        hero.acceleratorUnlocked = false;
+        hero.semiconductorUnlocked = false;
+        hero.mineralMagnetRadius = 0;
+        hero.radiationShield = false;
+        hero.lootTierBonus = 0;
+        hero.fissionMastered = false;
+        hero.fissionEnergyMul = 1.0;
+        hero.fusionMastered = false;
+        hero.fusionEnergyMul = 1.0;
+        hero.acceleratorEfficiency = 1.0;
+
+        // Refined elements (purified for semiconductor production)
+        hero.refinedElements = {};
+
+        // Technology upgrades (permanent flags from TECH_UPGRADES)
+        hero.techRouteCalc = false;
+        hero.techElementScanner = false;
+        hero.techLaserTurret = false;
+        hero.techTeleporter = false;
+        hero.techEMP = false;
+        hero.techForceField = false;
+        hero.techForceFieldHP = 0;
+        hero.techSolarPanel = false;
+        hero.techThermoelectric = false;
+        hero.techReactorControl = false;
+        hero.techSuperconductor = false;
+        hero.teleporterNodes = [];
+        hero.empCharges = 0;
+        hero.laserTurretCharges = 0;
 
         // Zone progression (Phase 4)
         hero.completedZones = [];
+        hero.ngPlusLevel = 0;
+        hero.victoryAchieved = false;
 
         // Element bonus rewards
         hero.appliedElementBonuses = {};
@@ -55,6 +101,8 @@ const HeroCrafting = {
 
         // Camp stash – persistent storage for minerals, fuel, etc.
         hero.campStash = [];
+        hero.fuelReserve = 0;
+        hero._backpackUpgrades = 0;
     },
 
     /** Return serializable crafting state from a hero instance. */
@@ -65,8 +113,13 @@ const HeroCrafting = {
             mineralVisionRadius:  hero.mineralVisionRadius,
             mineralIdentifyLevel: hero.mineralIdentifyLevel,
             miningYieldBonus:     hero.miningYieldBonus,
+            doubleYieldChance:    hero.doubleYieldChance,
             smeltBonusElement:    hero.smeltBonusElement,
             guaranteedRareMineral: hero.guaranteedRareMineral,
+            prospectorHighTier:   hero.prospectorHighTier,
+            mineralMinimap:       hero.mineralMinimap,
+            geodeSplitter:        hero.geodeSplitter,
+            smeltCountForGeode:   hero.smeltCountForGeode,
             mineralsCollected:    hero.mineralsCollected,
             totalPlayTime:        hero.totalPlayTime,
             metallurgistUnlocked: hero.metallurgistUnlocked,
@@ -77,16 +130,53 @@ const HeroCrafting = {
             alloyStatBonus:       hero.alloyStatBonus,
             oreEfficiencyChance:  hero.oreEfficiencyChance,
             doubleAlloyChance:    hero.doubleAlloyChance,
+            fastSmeltStacks:      hero.fastSmeltStacks,
+            batchSmeltSize:       hero.batchSmeltSize,
+            reforgeUnlocked:      hero.reforgeUnlocked,
             alloyInventory:       { ...hero.alloyInventory },
             campStash:            hero.campStash.map(e => ({ ...e })),
+            fuelReserve:          hero.fuelReserve || 0,
+            _backpackUpgrades:    hero._backpackUpgrades || 0,
             chemistUnlocked:      hero.chemistUnlocked,
             chemLabUnlocked:      hero.chemLabUnlocked,
             potionDurationBonus:  hero.potionDurationBonus,
             potionPotencyBonus:   hero.potionPotencyBonus,
+            potionMagnitudeBonus: hero.potionMagnitudeBonus,
             chemBombBonus:        hero.chemBombBonus,
             chemRadiusBonus:      hero.chemRadiusBonus,
+            chemAcidDefShred:     hero.chemAcidDefShred,
+            chemDoubleBrewChance: hero.chemDoubleBrewChance,
+            chemBombChain:        hero.chemBombChain,
+            transmutationUnlocked: hero.transmutationUnlocked,
             toxicBladeChance:     hero.toxicBladeChance,
+            acceleratorUnlocked:  hero.acceleratorUnlocked,
+            semiconductorUnlocked: hero.semiconductorUnlocked,
+            mineralMagnetRadius:  hero.mineralMagnetRadius,
+            radiationShield:      hero.radiationShield,
+            lootTierBonus:        hero.lootTierBonus,
+            fissionMastered:      hero.fissionMastered,
+            fissionEnergyMul:     hero.fissionEnergyMul,
+            fusionMastered:       hero.fusionMastered,
+            fusionEnergyMul:      hero.fusionEnergyMul,
+            acceleratorEfficiency: hero.acceleratorEfficiency,
+            refinedElements:      { ...hero.refinedElements },
+            techRouteCalc:        hero.techRouteCalc,
+            techElementScanner:   hero.techElementScanner,
+            techLaserTurret:      hero.techLaserTurret,
+            techTeleporter:       hero.techTeleporter,
+            techEMP:              hero.techEMP,
+            techForceField:       hero.techForceField,
+            techForceFieldHP:     hero.techForceFieldHP,
+            techSolarPanel:       hero.techSolarPanel,
+            techThermoelectric:   hero.techThermoelectric,
+            techReactorControl:   hero.techReactorControl,
+            techSuperconductor:   hero.techSuperconductor,
+            teleporterNodes:      hero.teleporterNodes ? [...hero.teleporterNodes] : [],
+            empCharges:           hero.empCharges || 0,
+            laserTurretCharges:   hero.laserTurretCharges || 0,
             completedZones:       [...hero.completedZones],
+            ngPlusLevel:          hero.ngPlusLevel,
+            victoryAchieved:      hero.victoryAchieved,
             appliedElementBonuses: { ...hero.appliedElementBonuses },
             elementGoldMul:       hero.elementGoldMul,
             elementPoisonResist:  hero.elementPoisonResist,
@@ -108,8 +198,13 @@ const HeroCrafting = {
         hero.mineralVisionRadius  = stats.mineralVisionRadius  || 0;
         hero.mineralIdentifyLevel = stats.mineralIdentifyLevel || 0;
         hero.miningYieldBonus     = stats.miningYieldBonus     || 0;
+        hero.doubleYieldChance    = stats.doubleYieldChance    || 0;
         hero.smeltBonusElement    = stats.smeltBonusElement    || 0;
         hero.guaranteedRareMineral = stats.guaranteedRareMineral || false;
+        hero.prospectorHighTier   = stats.prospectorHighTier   || false;
+        hero.mineralMinimap       = stats.mineralMinimap       || false;
+        hero.geodeSplitter        = stats.geodeSplitter        || false;
+        hero.smeltCountForGeode   = stats.smeltCountForGeode   || 0;
         hero.mineralsCollected    = stats.mineralsCollected    || 0;
         hero.totalPlayTime        = stats.totalPlayTime        || 0;
         hero.metallurgistUnlocked = stats.metallurgistUnlocked || false;
@@ -120,16 +215,53 @@ const HeroCrafting = {
         hero.alloyStatBonus       = stats.alloyStatBonus       || 0;
         hero.oreEfficiencyChance  = stats.oreEfficiencyChance  || 0;
         hero.doubleAlloyChance    = stats.doubleAlloyChance    || 0;
+        hero.fastSmeltStacks      = stats.fastSmeltStacks      || 0;
+        hero.batchSmeltSize       = stats.batchSmeltSize       || 1;
+        hero.reforgeUnlocked      = stats.reforgeUnlocked      || false;
         hero.alloyInventory       = stats.alloyInventory       ? { ...stats.alloyInventory } : {};
         hero.campStash            = (stats.campStash || []).map(e => ({ ...e }));
+        hero.fuelReserve          = stats.fuelReserve || 0;
+        hero._backpackUpgrades    = stats._backpackUpgrades || 0;
         hero.chemistUnlocked      = stats.chemistUnlocked      || false;
         hero.chemLabUnlocked      = stats.chemLabUnlocked      || false;
         hero.potionDurationBonus  = stats.potionDurationBonus  || 0;
         hero.potionPotencyBonus   = stats.potionPotencyBonus   || 0;
+        hero.potionMagnitudeBonus = stats.potionMagnitudeBonus || 0;
         hero.chemBombBonus        = stats.chemBombBonus        || 0;
         hero.chemRadiusBonus      = stats.chemRadiusBonus      || 0;
+        hero.chemAcidDefShred     = stats.chemAcidDefShred     || 0;
+        hero.chemDoubleBrewChance = stats.chemDoubleBrewChance || 0;
+        hero.chemBombChain        = stats.chemBombChain        || false;
+        hero.transmutationUnlocked = stats.transmutationUnlocked || false;
         hero.toxicBladeChance     = stats.toxicBladeChance     || 0;
+        hero.acceleratorUnlocked  = stats.acceleratorUnlocked  || false;
+        hero.semiconductorUnlocked = stats.semiconductorUnlocked || false;
+        hero.mineralMagnetRadius  = stats.mineralMagnetRadius  || 0;
+        hero.radiationShield      = stats.radiationShield      || false;
+        hero.lootTierBonus        = stats.lootTierBonus        || 0;
+        hero.fissionMastered      = stats.fissionMastered      || false;
+        hero.fissionEnergyMul     = stats.fissionEnergyMul     || 1.0;
+        hero.fusionMastered       = stats.fusionMastered       || false;
+        hero.fusionEnergyMul      = stats.fusionEnergyMul      || 1.0;
+        hero.acceleratorEfficiency = stats.acceleratorEfficiency || 1.0;
+        hero.refinedElements      = stats.refinedElements      ? { ...stats.refinedElements } : {};
+        hero.techRouteCalc        = stats.techRouteCalc        || false;
+        hero.techElementScanner   = stats.techElementScanner   || false;
+        hero.techLaserTurret      = stats.techLaserTurret      || false;
+        hero.techTeleporter       = stats.techTeleporter       || false;
+        hero.techEMP              = stats.techEMP              || false;
+        hero.techForceField       = stats.techForceField       || false;
+        hero.techForceFieldHP     = stats.techForceFieldHP     || 0;
+        hero.techSolarPanel       = stats.techSolarPanel       || false;
+        hero.techThermoelectric   = stats.techThermoelectric   || false;
+        hero.techReactorControl   = stats.techReactorControl   || false;
+        hero.techSuperconductor   = stats.techSuperconductor   || false;
+        hero.teleporterNodes      = stats.teleporterNodes      ? [...stats.teleporterNodes] : [];
+        hero.empCharges           = stats.empCharges           || 0;
+        hero.laserTurretCharges   = stats.laserTurretCharges   || 0;
         hero.completedZones       = stats.completedZones       ? [...stats.completedZones] : [];
+        hero.ngPlusLevel          = stats.ngPlusLevel          || 0;
+        hero.victoryAchieved      = stats.victoryAchieved      || false;
         hero.appliedElementBonuses = stats.appliedElementBonuses ? { ...stats.appliedElementBonuses } : {};
         hero.elementGoldMul       = stats.elementGoldMul       || 0;
         hero.elementPoisonResist  = stats.elementPoisonResist  || 0;
