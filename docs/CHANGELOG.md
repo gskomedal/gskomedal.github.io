@@ -2,6 +2,97 @@
 
 ---
 
+## v0.53 – 2026-05-07
+
+### Tekniske endringer
+- **Karakterskaper-oppryddelse (#149):** `_rebuildAppearancePickers()` (146 linjer med tre nestede palett-løkker og fire knapperad-løkker) er splittet i to gjenbrukbare hjelpere: `_renderColorRow()` for prikk-paletter (hud/hår/øyne/farge) og `_renderToggleRow()` for tekstknapp-rader (kjønn/drakt/frisyre/skjegg). Funksjonsuttrykket er nå deklarativt: én linje per rad. CharacterCreatorScene 607 → 589 linjer
+
+---
+
+## v0.52 – 2026-05-05
+
+### Balanse
+- **Normal vanskelighetsgrad for tøff på høye verdener (#133):** Monster-HP-skaleringen per verden er redusert fra ×0.35/verden til ×0.25/verden, og den ekstra knekkpunktsøkningen etter verden 8 er kuttet fra ×0.15 til ×0.06. Tilsvarende er angrep-skaleringen redusert fra ×0.20/×0.08 til ×0.15/×0.04. Normal modus gir nå +10 % XP-bonus for å hjelpe heltens progresjon på høye verdener
+- **For lite energi i midtspillet (#134):** Alle brensel-energiverdier er hevet betraktelig: tre 1→3, trekull 2→5, kull 3→8, råolje 8→18, naturgass 10→25. Dette gjør det realistisk å smelte og lage legeringer gjennom en hel verden uten å gå tom for brensel
+
+### Nye funksjoner
+- **Pyrolyse: Ekstraher C og H fra organisk brensel (#139):** Ny seksjon i Smelte-fanen lar spilleren pyrolysere brensel (tre/trekull/kull/råolje/naturgass) for å ekstrahere karbon (C) og/eller hydrogen (H). Kull og trekull gir pålitelig C; råolje og naturgass gir C + H. Koster litt energi per enhet
+- **Bomber sprenger sprukne vegger (#137):** Krutt, Dynamitt og Thermittladning har nå `wallBreak`-flagg. Når de detonerer, fjernes alle sprukne vegger innenfor radius (CRACKED_WALL → FLOOR). Kartet tegnes om automatisk
+- **Smidd nøkkel og smidd hakke synlig i Smi-fanen (#136):** Smi-fanen viser nå verktøy (nøkkel fra bronse, hakke fra stål) med korrekt etikett «Verktøy». Manglende ID-oppslag i `forgeEquipment()` er fikset
+
+### Feilrettinger
+- **Mineralspawn: Tier-1 mineraler utilgjengelige på høye verdener (#139):** Spredningen i `rollMineralTier()` er justert slik at tier-1 mineraler (bauxitt/aluminium, olivin/magnesium, kalkstein/karbon) fremdeles kan dukke opp fra verden 10 og oppover
+
+### Tekniske endringer
+- Monster.js: Reduserte HP- og ATK-skaleringskoeffisienter for normal/hard modus (hard modus beholder sine hpMul/atkMul-multiplikatorer)
+- GameScene.js: Normal modus xpMul hevet fra 1.0 til 1.1
+- alloys.js: Økte energyValue for alle FUEL_DEFS; lagt til `pyrolysisYields` og `pyrolysisCost` på alle brenseltyper
+- molecules.js: Lagt til `wallBreak: 'cracked'` på black_powder, dynamite og thermite_charge
+- ChemistrySystem.js: Bombebruk-handler itererer nå over maze-tiles og gjør CRACKED_WALL → FLOOR innenfor radius når `wallBreak`-flagget er satt
+- SmeltingSystem.js: Ny metode `pyrolyseFuel()` og fikset `forgeEquipment()` til å falle tilbake til id-søk for verktøy
+- SmelteryScene.js: Ny pyrolyse-seksjon i Smelte-fanen; Smi-fanen viser «Verktøy» for tool-type items
+- minerals.js: `rollMineralTier()` bruker nå `baseTier - 4` (fra `baseTier - 3`) og 20 % sjanse (fra 15 %) for laveste tier, slik at T1-mineraler fremdeles spawner på høye verdener
+
+---
+
+## v0.51 – 2026-05-02
+
+### Feilrettinger
+- **Smelting av mineraler ga ikke alle forventede grunnstoffer (#138):** Sekundære yields i `MINERAL_DEFS` hadde for lave sjanser (0.3–0.5), slik at viktige grunnstoffer som C fra kalkstein, Fe fra ilmenitt og S fra pyritt uteble ved de fleste smeltinger. Alle ore-mineraler er gjennomgått: sjanser for elementer som er tydelig representert i mineralformelen er hevet til 0.7–1.0, mens rene sporstoff-yields (Ag i galena, alle PGM-yields) beholdes lave som tiltenkt "lotteri-belønning". Eksempler på nøkkelendringer:
+  - Kalkstein (CaCO₃): C-sjanse 0.8 → **1.0**, lagt til O (0.7)
+  - Olivin (Mg,Fe)₂SiO₄: Fe-sjanse 0.5 → **0.85**, Si-sjanse 0.3 → **0.7**, lagt til O (0.6)
+  - Ilmenitt (FeTiO₃): Fe-sjanse 0.7 → **1.0**, lagt til O (0.6)
+  - Pyritt (FeS₂): S-sjanse 0.8 → **1.0**
+  - Magnetitt (Fe₃O₄): lagt til O (0.85)
+  - Bauxitt (Al₂O₃): lagt til O (0.85)
+  - Malakit (Cu₂CO₃(OH)₂): lagt til C (0.85) og O (0.6)
+  - Kalkopyritt (CuFeS₂): Fe-sjanse 0.5 → **0.85**, S-sjanse 0.3 → **0.7**
+  - Kassiteritt (SnO₂): lagt til O (0.85)
+  - Apatitt: Ca-sjanse 0.5 → **1.0**, lagt til O (0.7)
+  - 30+ øvrige mineraler: tilsvarende oppjusteringer av secondary yields
+- **Ferdighetstreet krevde maks stack i forrige tier for å gå videre (#135):** `isSkillUnlocked()` i `src/data/skills.js` krevde `_countSkill(hero, prevSkill.id) >= prevSkill.maxStack`, noe som med f.eks. Geolog T1 "Malmøye" (maxStack 3) tvang spilleren til å bruke tre ferdighetspunkter på samme ferdighet før T2 ble tilgjengelig. Betingelsen er endret til `>= 1`: ett punkt i forrige tier er nå nok til å låse opp neste tier, men man kan fortsatt stable for de ekstra bonusene
+- **Smelteovn-filterrad: feil rekkefølge og overlapp ved scrolling (#141):** Grunnstoff-filterknappene øverst i Smelt/Legering/Smi-fanene var sortert etter Set-iterasjonsrekkefølge (ALLOY_DEFS-rekkefølge etterfulgt av oppdagede grunnstoffer), ikke etter atomnummer. Når raden brøt over flere linjer kunne rullbart innhold under scrolle opp og overlappe filterknappene visuelt fordi tab-innhold ble tegnet etter filteret og dermed lå høyere i z-order. Symbolene sorteres nå etter atomnummer (`ELEMENTS[symbol].atomicNumber`), og filterraden tegnes med en opak bakgrunns-cover på `setDepth(9)` med selve knappene på `setDepth(10)` slik at de alltid ligger over scrollet innhold
+
+### Tekniske endringer
+- minerals.js: Secondary yield-sjanser revidert for samtlige 45 ore-mineraler. Krystaller uendret (lave element-sjanser er tilsiktet da effektbonusen er primærverdien). PGM-ore og sporstoff-yields som Ag i galena beholdes uendret
+- skills.js: `isSkillUnlocked()` — betingelse for tier-fremdrift endret fra `>= prevSkill.maxStack` til `>= 1`. Fil- og funksjonskommentarer oppdatert tilsvarende
+- SmelteryScene.js: `_drawElementFilterRow()` konverterer `recipeElements`-Set til array og sorterer etter atomnummer før rendering. Bakgrunns-cover (Graphics) tegnes til slutt med `setDepth(9)`, og «Alle»-knapp + alle symbol-badges får `setDepth(10)` — uavhengig av om filteret tegnes før eller etter tab-innhold
+
+---
+
+## v0.50 – 2026-04-28
+
+### Feilrettinger
+- **Halvleder-crafting var utilgjengelig:** Datamodellen for halvledere har tre lag — raffinering (`pure_si`/`pure_ge`/…), halvledermateriale (`silicon_wafer`, `germanium_crystal`, …) og teknologiinstallasjon — men Smeltery-UIet hadde bare faner for første og siste lag. Mellomsteget i `craftSemiconductor()` hadde null callsites, så `hero.alloyInventory[semiId]` vokste aldri og alle teknologi-installasjoner stod permanent på `(0/1)`. Lagt til ny **Halvleder**-fane som bygger bro mellom raffinerte deler og teknologi-fanen
+- **Helium uoppnåelig før verden 22:** Gasslomme-spawneren brukte `Math.min(rand, (wn-10)/3)` til å bestemme indeks i edelgass-listen, noe som gjorde He effektivt ulåselig før verden 22. Akselerator-oppskriftene Cm/Bk/Cf/Md krever He som projektil og åpner i verden 13 — clampen blokkerte hele synteseprogresjonen mellom Pu og tunge transurane. Indeksvalget er nå uniformt over tilgjengelige edelgasser
+- **Fusjons-energi var additiv, ikke kombinatorisk:** `calculateFuelEnergy()` la H- og Li-energi sammen uavhengig (`hCount * 80 + liCount * 150`), så en spiller med null hydrogen og bare litium fikk fortsatt fusjons-energi. Endret til `min(H, Li)` per par à 230 base-energi — i tråd med skill-teksten *"D-T fusjon: H + Li → He + energi"*
+- **Virtuelt drivstoff ble aldri brukt opp:** U/Th/H/Li gav energi-headroom uten å bli trukket fra `elementTracker`, så én enkelt U-atom ga uendelig +50 energi til alltid. `consumeFuel()` trekker nå fra virtuelt drivstoff etter at fysisk drivstoff (tre/kull/olje/gass) er tomt: Th først, så U for fisjon, og H+Li-par til slutt for fusjon
+- **`fusionUnlocked` var en død flag:** Edelgass-fullføringsbonusen satte `hero.fusionUnlocked = true` men ingenting brukte flagget. `calculateFuelEnergy()` og `consumeFuel()` aksepterer den nå som en alternativ vei til D-T fusjons-energi (uten ×5-multiplikatoren fra Fysiker T4 — flagget gir base-rate)
+
+### Tekniske endringer
+- SmeltingSystem.js: Nye statiske konstanter `FISSION_U_ENERGY`, `FISSION_TH_ENERGY`, `FUSION_PAIR_ENERGY`. Ny privat metode `_consumeVirtualFuel()`. Fusjon i `calculateFuelEnergy()` aksepterer nå både `fusionMastered` og `fusionUnlocked` (sistnevnte med multiplikator 1.0). Fusjon produserer He som biprodukt — i tråd med tidligere kommentar i koden
+- SmelteryScene.js: Ny `_drawSemiTab()` som lister alle 6 SEMICONDUCTOR_DEFS, viser raffinerte og rå-element-ingredienser hver for seg, og trigger `craftSemiconductor()` + `consumeFuel()`. Tab-bredde justert fra 100 til 92 piksler for å rommer 7 faner
+- ItemSpawner.js: Fjernet `Math.min((wn-10)/3)` clamp fra gasslomme-edelgassvalg
+- tests/test-smelting.js: 6 nye tester for fusjon-min, virtuelt brensel-forbruk, He-biprodukt, fusionUnlocked-vei, og halvleder-crafting (totalt 96 tester, alle grønne)
+
+---
+
+## v0.49 – 2026-04-28
+
+### Nye funksjoner
+- **Velkomst-popup ved første besøk:** Ny `WelcomeScene` åpnes automatisk første gang en spiller besøker hovedmenyen, og kan gjenåpnes med `[ INTRO ]`-knappen. Popup-en har fire stemnings­ladde sider — `LABYRINT HERO` (premiss og atmosfære), `HELTEN` (raser, startbonuser og ferdighetstre), `LABYRINTEN` (verdens­struktur, spesialrom og smelter/lab/akselerator) og `SLIK SPILLER DU` (detaljerte kontroller og spilltips). Lukkes med `[ START EVENTYRET ]`, `[×]`, ESC, eller ved klikk utenfor panelet — og «sett»-tilstanden lagres i `localStorage` slik at popup-en ikke dukker opp igjen automatisk
+- **Mineral-wiki:** Ny scene `MineralWikiScene` som lister alle 60+ mineraler og krystaller med formel, tier, hvilke grunnstoffer de gir og hvor de spawner. Faner for `ALLE` / `T1`–`T6` / `KRYSTALLER` og en `MANGLENDE`-fane som viser hvilke grunnstoffer helten ennå ikke har oppdaget – og hvilke mineraler som er kjente kilder. Tilgjengelig fra ny `[ MINERAL-WIKI ]`-knapp i hovedmenyen og som overlay-knapp i inventaret
+
+### Tekniske endringer
+- WelcomeScene.js: Ny scene med `_pages`-array og `_renderPage()`-løkke. Naviger med Pil/SPACE/Klikk; ESC eller klikk utenfor lukker. Skip-hint vises kun ved første-gangs auto-åpning
+- SaveManager.js: Nye metoder `hasSeenIntro()` og `markIntroSeen()` (separat `INTRO_KEY` slik at intro-flagget overlever `clear()`)
+- MenuScene.js: Fjernet det gamle innebygde info-panelet. Auto-launcher `WelcomeScene` når `!SaveManager.hasSeenIntro()`. Bunnknapp-raden utvidet til tre: `[ INTRO ]` / `[ LEDERTAVLE ]` / `[ MINERAL-WIKI ]`
+- MineralWikiScene.js: Ny scene som leser `MINERAL_DEFS`, `MINERAL_TIER_COLORS` og `ELEMENTS` direkte. Spawn-lokasjoner avledes ved å transkribere reglene fra `ItemSpawner.js` i en lokal `_getMineralLocations()` – ingen endringer i mineraldata kreves
+- InventoryScene.js: Ny `Mineral-wiki`-knapp ved siden av `Elementbok [B]`
+- main.js + index.html: Registrerer `WelcomeScene` og `MineralWikiScene`
+
+---
+
 ## v0.48 – 2026-04-25
 
 ### Nye funksjoner

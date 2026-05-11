@@ -78,9 +78,10 @@ class SmelteryScene extends Phaser.Scene {
         ];
         if (this.heroRef.semiconductorUnlocked) {
             tabs.push({ id: 'refine', label: 'Raffiner' });
-            tabs.push({ id: 'tech', label: 'Teknologi' });
+            tabs.push({ id: 'semi',   label: 'Halvleder' });
+            tabs.push({ id: 'tech',   label: 'Teknologi' });
         }
-        const tabW = tabs.length > 4 ? 100 : 130;
+        const tabW = tabs.length > 4 ? 92 : 130;
         const tabY = this.py + 62;
         tabs.forEach((tab, i) => {
             const tx = this.px + 30 + i * (tabW + 10) + tabW / 2;
@@ -107,8 +108,8 @@ class SmelteryScene extends Phaser.Scene {
         // ── Content area ──────────────────────────────────────────────────────
         this._baseContentY = tabY + 30;
         this.contentY = this._baseContentY;
-        this._scrollOffsets = { stash: 0, smelt: 0, alloy: 0, forge: 0, refine: 0, tech: 0 };
-        this._maxScrolls = { stash: 0, smelt: 0, alloy: 0, forge: 0, refine: 0, tech: 0 };
+        this._scrollOffsets = { stash: 0, smelt: 0, alloy: 0, forge: 0, refine: 0, semi: 0, tech: 0 };
+        this._maxScrolls = { stash: 0, smelt: 0, alloy: 0, forge: 0, refine: 0, semi: 0, tech: 0 };
         this._elementFilter = null; // null = show all, or element symbol string
 
         // Mouse wheel scrolling (per-tab offset)
@@ -162,7 +163,7 @@ class SmelteryScene extends Phaser.Scene {
 
         // Update tab button colors
         const tabIds = ['stash', 'smelt', 'alloy', 'forge'];
-        if (this.heroRef.semiconductorUnlocked) { tabIds.push('refine', 'tech'); }
+        if (this.heroRef.semiconductorUnlocked) { tabIds.push('refine', 'semi', 'tech'); }
         UIHelper.updateTabButtons(this._tabBtns, tabIds, this._tab, '#ff7722', '#554433');
 
         // Update fuel text
@@ -188,6 +189,7 @@ class SmelteryScene extends Phaser.Scene {
                 }
                 break;
             case 'refine': this._drawRefineTab(); break;
+            case 'semi':   this._drawSemiTab();   break;
             case 'tech':   this._drawTechTab();   break;
         }
 
@@ -243,7 +245,8 @@ class SmelteryScene extends Phaser.Scene {
         const collected = hero.elementTracker.collected;
         const leftX = this.px + 10;
         const maxW = this.panelW - 40;
-        let y = this.contentY;
+        const filterStartY = this.contentY;
+        let y = filterStartY;
         let bx = leftX;
 
         // "Alle" reset button
@@ -267,7 +270,15 @@ class SmelteryScene extends Phaser.Scene {
             recipeElements.add(symbol);
         }
 
-        for (const symbol of recipeElements) {
+        // Sort by atomic number so the filter row follows periodic-table order
+        const sortedSymbols = Array.from(recipeElements).sort((a, b) => {
+            const an = (typeof ELEMENTS !== 'undefined' && ELEMENTS[a]) ? ELEMENTS[a].atomicNumber : 999;
+            const bn = (typeof ELEMENTS !== 'undefined' && ELEMENTS[b]) ? ELEMENTS[b].atomicNumber : 999;
+            return an - bn;
+        });
+
+        const badges = [];
+        for (const symbol of sortedSymbols) {
             const count = collected[symbol] || 0;
             const elem = typeof ELEMENTS !== 'undefined' ? ELEMENTS[symbol] : null;
             const col = elem ? elem.color : 0xaaaaaa;
@@ -288,11 +299,28 @@ class SmelteryScene extends Phaser.Scene {
                 this._scrollOffsets[this._tab] = 0;
                 this._refresh();
             });
+            badges.push(badge);
             bx += badge.width + 3;
             if (bx > leftX + maxW) { bx = leftX; y += 18; }
         }
 
         this.contentY = y + 22;
+
+        // Draw an opaque cover behind the filter row so scrolled content cannot
+        // bleed through it. The cover is drawn AFTER tab content in z-order
+        // because _drawElementFilterRow() is called last in _refresh() for
+        // smelt/alloy/forge tabs — keeping the filter always on top.
+        const coverH = this.contentY - filterStartY;
+        const cover = this._d(this.add.graphics());
+        cover.fillStyle(0x0a0608, 1.0);
+        cover.fillRect(this.px + 6, filterStartY, this.panelW - 12, coverH);
+        cover.lineStyle(1, 0x221100, 1.0);
+        cover.lineBetween(this.px + 6, filterStartY + coverH - 2, this.px + this.panelW - 6, filterStartY + coverH - 2);
+
+        // Raise all filter objects above the cover and above scrolled content
+        allBtn.setDepth(10);
+        for (const b of badges) b.setDepth(10);
+        cover.setDepth(9);
     }
 
     _drawLockedTab() {
@@ -692,7 +720,94 @@ class SmelteryScene extends Phaser.Scene {
         if (elemY <= visBot) {
             this._drawElementInventory(startX, Math.max(elemY, visTop), colW);
         }
-        this._contentEndY = elemBaseY + 120;
+
+        // Pyrolysis section – extract C/H from organic fuels
+        const pyroBaseY = elemBaseY + 130;
+        const pyroHeaderY = pyroBaseY - scrollOff;
+        if (pyroHeaderY <= visBot) {
+            this._d(this.add.text(cx, pyroHeaderY, 'Pyrolyse brensel → grunnstoffer:', {
+                fontSize: '14px', color: '#887766', fontFamily: 'monospace'
+            }).setOrigin(0.5));
+        }
+
+        const pyroFuels = [];
+        for (let i = 0; i < hero.inventory.backpack.length; i++) {
+            const entry = hero.inventory.backpack[i];
+            if (!entry) continue;
+            const def = typeof FUEL_DEFS !== 'undefined' ? FUEL_DEFS[entry.id] : null;
+            if (def && def.pyrolysisYields) pyroFuels.push({ source: 'backpack', slot: i, def, count: entry.count || 1 });
+        }
+        if (hero.campStash) {
+            for (let i = 0; i < hero.campStash.length; i++) {
+                const entry = hero.campStash[i];
+                if (!entry || entry.count <= 0) continue;
+                const def = typeof FUEL_DEFS !== 'undefined' ? FUEL_DEFS[entry.id] : null;
+                if (def && def.pyrolysisYields) pyroFuels.push({ source: 'stash', slot: i, def, count: entry.count });
+            }
+        }
+
+        let pyroRowY = pyroBaseY + 22;
+        if (pyroFuels.length === 0) {
+            const noFuelY = pyroRowY - scrollOff;
+            if (noFuelY >= visTop && noFuelY <= visBot) {
+                this._d(this.add.text(cx, noFuelY, 'Ingen organisk brensel å pyrolysere.', {
+                    fontSize: '13px', color: '#443322', fontFamily: 'monospace'
+                }).setOrigin(0.5));
+            }
+            pyroRowY += 20;
+        } else {
+            for (const pf of pyroFuels) {
+                const adjY = pyroRowY - scrollOff;
+                pyroRowY += 44;
+                if (adjY > visBot) continue;
+                if (adjY < visTop - 44) continue;
+                const pyroCheck = this.smelter.pyrolyseFuel ? { canPyro: this.smelter.calculateFuelEnergy(hero) >= (pf.def.pyrolysisCost || 2) } : { canPyro: false };
+                const pCol = pyroCheck.canPyro ? 0x44aacc : 0x443322;
+                const pHex = '#' + pCol.toString(16).padStart(6, '0');
+                const bg = this._d(this.add.graphics());
+                bg.fillStyle(pCol, 0.08);
+                bg.fillRoundedRect(startX, adjY, colW, 40, 4);
+                const srcLabel = pf.source === 'stash' ? ' [lager]' : '';
+                this._d(this.add.text(startX + 8, adjY + 4, `${pf.def.name} (×${pf.count})${srcLabel}`, {
+                    fontSize: '14px', color: pHex, fontFamily: 'monospace', fontStyle: 'bold'
+                }));
+                const yieldStr = pf.def.pyrolysisYields.map(yld => `${yld.symbol}×${yld.amount}`).join(', ');
+                this._d(this.add.text(startX + 8, adjY + 22, `→ ${yieldStr}  |  Energi: ${pf.def.pyrolysisCost || 2}`, {
+                    fontSize: '13px', color: '#776655', fontFamily: 'monospace'
+                }));
+                if (pyroCheck.canPyro) {
+                    const btn = this._d(this.add.text(startX + colW - 100, adjY + 10, '[ Pyrolyse ]', {
+                        fontSize: '13px', color: '#44aacc', fontFamily: 'monospace', fontStyle: 'bold'
+                    }).setInteractive({ useHandCursor: true }));
+                    btn.on('pointerover', () => btn.setColor('#88ccee'));
+                    btn.on('pointerout', () => btn.setColor('#44aacc'));
+                    btn.on('pointerdown', () => this._doPyrolysis(pf));
+                }
+            }
+        }
+        this._contentEndY = pyroRowY;
+    }
+
+    _doPyrolysis(pyroFuel) {
+        const hero = this.heroRef;
+        const result = this.smelter.pyrolyseFuel(pyroFuel.def.id, hero);
+        if (!result) return;
+
+        // Remove one fuel unit from source
+        if (pyroFuel.source === 'stash') {
+            const entry = hero.campStash[pyroFuel.slot];
+            if (entry) { entry.count--; if (entry.count <= 0) hero.campStash.splice(pyroFuel.slot, 1); }
+        } else {
+            const entry = hero.inventory.backpack[pyroFuel.slot];
+            if (entry) hero.inventory.dropSlot(pyroFuel.slot);
+        }
+
+        const msgParts = result.elements.map(e => `+${e.amount} ${e.symbol}`).join(', ');
+        if (typeof EventBus !== 'undefined') {
+            EventBus.emit('floatingText', { gx: hero.gridX, gy: hero.gridY, msg: msgParts || 'Ingen utbytte', color: '#44aacc' });
+        }
+        Audio.playPickup();
+        this._refresh();
     }
 
     _doSmelt(slotIndex, mineralDef) {
@@ -936,7 +1051,7 @@ class SmelteryScene extends Phaser.Scene {
                 const hexCol = '#' + (equip.color || 0xaabbcc).toString(16).padStart(6, '0');
                 const typeLabel = isPet
                     ? (equip.petSlot === 'weapon' ? '🐾 Kjæledyr-klo' : '🐾 Kjæledyr-rust')
-                    : (equip.type === 'weapon' ? 'Våpen' : 'Rustning');
+                    : (equip.type === 'weapon' ? 'Våpen' : equip.type === 'tool' ? 'Verktøy' : 'Rustning');
 
                 const bg = this._d(this.add.graphics());
                 bg.fillStyle(equip.color || 0xaabbcc, 0.08);
@@ -1131,6 +1246,108 @@ class SmelteryScene extends Phaser.Scene {
             }
         });
         this._contentEndY = y + REFINING_RECIPES.length * rowStep;
+    }
+
+    // ── SEMI TAB: Refined elements + raw → Semiconductor materials ──────────
+    // Bridges the refining step (REFINING_RECIPES) and the technology step
+    // (TECH_UPGRADES). Without this, hero.alloyInventory[semiId] never grows
+    // and tech installs are unreachable.
+
+    _drawSemiTab() {
+        const hero = this.heroRef;
+        const cx = this.px + this.panelW / 2;
+        let y = this.contentY;
+        const scrollOff = this._scrollOffsets.semi || 0;
+        const visBot = this.py + this.panelH - 40;
+        const fuel = this.smelter.calculateFuelEnergy(hero);
+        const colW = Math.min(560, this.panelW - 40);
+        const startX = this.px + 20;
+
+        this._d(this.add.text(cx, y, 'Lag halvledermateriale fra raffinerte deler:', {
+            fontSize: '14px', color: '#8866ff', fontFamily: 'monospace'
+        }).setOrigin(0.5));
+        y += 22;
+
+        // Show current semiconductor inventory
+        const semiInv = hero.alloyInventory || {};
+        const semiEntries = Object.entries(semiInv).filter(([id, v]) =>
+            v > 0 && SEMICONDUCTOR_DEFS && SEMICONDUCTOR_DEFS[id]
+        );
+        if (semiEntries.length > 0) {
+            let rx = startX;
+            for (const [id, count] of semiEntries) {
+                const def = SEMICONDUCTOR_DEFS[id];
+                const col = '#' + (def.color || 0x8866ff).toString(16).padStart(6, '0');
+                const badge = this._d(this.add.text(rx, y, `${def.name}: ${count}`, {
+                    fontSize: '13px', color: col, fontFamily: 'monospace',
+                    backgroundColor: '#0a0818', padding: { x: 3, y: 1 }
+                }));
+                rx += badge.width + 8;
+                if (rx > startX + colW - 50) { rx = startX; y += 20; }
+            }
+            y += 22;
+        }
+
+        if (typeof SEMICONDUCTOR_DEFS === 'undefined') { this._contentEndY = y; return; }
+        const semis = Object.values(SEMICONDUCTOR_DEFS);
+        const rowStep = 56;
+
+        semis.forEach((semi, idx) => {
+            const baseY = y + idx * rowStep;
+            const ry = baseY - scrollOff;
+            if (ry > visBot || ry < this.contentY - rowStep) return;
+
+            const check = this.smelter.canCraftSemiconductor(semi.id, hero, fuel);
+            const col = check.canCraft ? 0x8866ff : 0x332244;
+            const hexCol = '#' + col.toString(16).padStart(6, '0');
+
+            const bg = this._d(this.add.graphics());
+            bg.fillStyle(col, 0.08);
+            bg.fillRoundedRect(startX, ry, colW, 50, 4);
+            bg.lineStyle(1, col, 0.3);
+            bg.strokeRoundedRect(startX, ry, colW, 50, 4);
+
+            this._d(this.add.text(startX + 8, ry + 4, `${semi.name} (T${semi.tier})`, {
+                fontSize: '15px', color: hexCol, fontFamily: 'monospace', fontStyle: 'bold'
+            }));
+
+            // Recipe display: refined ingredients show their refined name + count,
+            // raw element ingredients show the element symbol + collected count.
+            const inputStr = semi.recipe.map(ing => {
+                if (ing.refined) {
+                    const r = REFINING_RECIPES.find(rec => rec.id === ing.refined);
+                    const have = (hero.refinedElements || {})[ing.refined] || 0;
+                    return `${r ? r.name : ing.refined}:${have}/${ing.amount}`;
+                }
+                const have = hero.elementTracker.getCount(ing.symbol);
+                return `${ing.symbol}:${have}/${ing.amount}`;
+            }).join('  ');
+            this._d(this.add.text(startX + 8, ry + 22, inputStr, {
+                fontSize: '12px', color: '#665588', fontFamily: 'monospace',
+                wordWrap: { width: colW - 100 }
+            }));
+            this._d(this.add.text(startX + 8, ry + 36, `${check.energyCost} energi`, {
+                fontSize: '12px', color: '#554477', fontFamily: 'monospace'
+            }));
+
+            if (check.canCraft) {
+                const btn = this._d(this.add.text(startX + colW - 70, ry + 16, '[ Lag ]', {
+                    fontSize: '14px', color: '#8866ff', fontFamily: 'monospace', fontStyle: 'bold'
+                }).setInteractive({ useHandCursor: true }));
+                btn.on('pointerover', () => btn.setColor('#aa88ff'));
+                btn.on('pointerout', () => btn.setColor('#8866ff'));
+                btn.on('pointerdown', () => {
+                    const result = this.smelter.craftSemiconductor(semi.id, hero);
+                    if (result.success) {
+                        this.smelter.consumeFuel(hero, result.energyCost);
+                        EventBus.emit('floatingText', { gx: hero.gridX, gy: hero.gridY, msg: `Laget: ${semi.name}`, color: '#8866ff' });
+                        Audio.playPickup();
+                        this._refresh();
+                    }
+                });
+            }
+        });
+        this._contentEndY = y + semis.length * rowStep;
     }
 
     // ── TECH TAB: Install permanent technology upgrades ─────────────────────

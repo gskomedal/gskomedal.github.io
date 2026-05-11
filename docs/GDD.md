@@ -1,6 +1,6 @@
 # Labyrint Hero – Game Design Document
-**Versjon:** 0.47
-**Sist oppdatert:** 2026-04-25 (v0.48)
+**Versjon:** 0.52
+**Sist oppdatert:** 2026-05-05 (v0.52)
 
 ---
 
@@ -24,41 +24,76 @@ Et top-down 2D labyrint-RPG i nettleser. Spilleren navigerer en prosedyre-genere
 - **Lyd:** Web Audio API – prosedyremusikk og SFX, ingen lydfiler
 - **Lagring:** localStorage via SaveManager
 - **Multi-scene pattern:** GameScene + UIScene parallelt; SkillScene, InventoryScene og SettingsScene som overlays. UIScene har HUD-knapper for Elementbok, Skilltre og Inventar øverst til høyre
+- **Velkomstskjerm (MenuScene, v0.49):** Ren meny med tittel, vanskelighetsvalg, fortsett/nytt spill, og bunnrad med `[ INTRO ]` / `[ LEDERTAVLE ]` / `[ MINERAL-WIKI ]`. Den utfyllende introduksjonen ligger i en egen popup (`WelcomeScene`)
+- **Velkomst-popup (WelcomeScene, v0.49):** Fire-siders popup som åpnes automatisk første gang en spiller besøker menyen, og kan gjenåpnes via `[ INTRO ]`. Sider: `LABYRINT HERO` (lore/atmosfære), `HELTEN` (rasevalg, startbonuser, ferdighetstre), `LABYRINTEN` (verdens­struktur, spesialrom, smelter/lab/akselerator), `SLIK SPILLER DU` (kontroller og tips). Skip via klikk-utenfor / ESC / `[×]`. «Sett»-flagg lagres i `localStorage` med egen nøkkel slik at det overlever `SaveManager.clear()`
+- **Mineral-wiki (MineralWikiScene, v0.49):** Browseable katalog over alle mineraler/krystaller med formel, tier, yields og spawn-lokasjoner. `MANGLENDE`-fanen kobler udekkede grunnstoffer til mineraler som inneholder dem. Tilgjengelig fra menyen og fra inventarscenen
 
 ### Filstruktur
 ```
 src/
-  constants.js              – konstanter, WORLD_THEMES, getWorldTheme()
-  maze.js                   – MazeGenerator (DFS + ekstra passasjer)
-  utils/SaveManager.js      – localStorage persistens
-  data/skills.js            – 12 passive evner
-  data/items.js             – 31 gjenstander (våpen, rustning, forbruk, verktøy) + sjeldenhetsystem
-  graphics/CharacterSprite.js – prosedyrekaraktertegning (4 raser, 2 kjønn, 10 frisyrer, 4 klesstiler)
-  graphics/DetailedCharacterSprite.js – høyoppløselig karakterportrett (64-grid) med utstyrsvisning for menyskjermer
-  graphics/SceneBackgrounds.js – tematiske bakgrunner for leirplass og kjemilab
-  systems/Inventory.js      – 2 utstyrsplasser + 10-spors ryggsekk
-  systems/AudioManager.js   – flerstemt musikk-sekvenser + SFX-motoren
-  data/musicPieces.js       – 8 Grieg-inspirerte flerstemte komposisjoner
-  systems/MapRenderer.js    – kartrendering, tåke, portal-animasjon
-  systems/ItemSpawner.js    – kister, verktøy, gjenstander, kjøpmann
-  systems/MonsterManager.js – monsterplassering, AI, statuseffekter
-  systems/CombatManager.js  – nærkamp, bue, skadeberegning, drap
-  systems/InputHandler.js   – tastatur/touch-inndata, bevegelse, zoom
-  entities/Hero.js          – spillerkarakter
-  entities/Monster.js       – fiender med unike sprites per type
-  entities/Pet.js           – kjæledyr-følgesvenn (rev, katt, drage, ugle)
+  constants.js                       – konstanter, WORLD_THEMES, getWorldTheme()
+  maze.js                            – MazeGenerator (DFS + ekstra passasjer)
+  main.js                            – Phaser-oppstart og scene-registrering
+  utils/
+    SaveManager.js                   – localStorage persistens
+    Leaderboard.js                   – lokal ledertavle
+    GlobalLeaderboard.js             – global ledertavle (Cloudflare Worker)
+    UIHelper.js                      – felles UI-hjelpefunksjoner
+    EventBus.js                      – event-system
+  data/
+    skills.js                        – 6 skill-stier med tiers + kryssvei-synergier
+    elements.js                      – 118 grunnstoffer + transuranske syntese-oppskrifter
+    minerals.js                      – 60 mineraler/krystaller med yields og spawn-tier
+    alloys.js                        – legeringer, brensel, utstyr, kjæledyr-utstyr
+    molecules.js                     – kjemiske oppskrifter (potions, bomber, medisin)
+    items.js                         – våpen, rustning, forbruk, verktøy + sjeldenhetsystem
+    musicPieces.js                   – 8 Grieg-inspirerte flerstemte komposisjoner
+  graphics/
+    CharacterSprite.js               – prosedyrekaraktertegning (4 raser, 2 kjønn, 10 frisyrer, 4 klesstiler)
+    DetailedCharacterSprite.js       – høyoppløselig karakterportrett (64-grid) med utstyrsvisning
+    SceneBackgrounds.js              – tematiske bakgrunner for overlay-scener
+    ItemGraphics.js                  – gjenstandsgrafikk
+    MonsterGraphics.js               – monstergrafikk
+  systems/
+    ElementTracker.js                – element-samling og gruppebonuser
+    SmeltingSystem.js                – smelting, legeringer, smiing, fisjon/fusjon-energi, pyrolyse
+    ChemistrySystem.js               – kjemisk syntese + transmutasjon
+    Inventory.js                     – utstyr + ryggsekk
+    AudioManager.js                  – prosedyremusikk og SFX
+    TouchControls.js                 – mobilkontroller
+    MapRenderer.js                   – kartrendering, tåke, portal-animasjon, mineral-syn
+    ItemSpawner.js                   – kister, mineraler, kjøpmann, kjæledyr-egg
+    MonsterManager.js                – monsterplassering, AI, statuseffekter
+    CombatManager.js                 – nærkamp, bue, skadeberegning, drap
+    InputHandler.js                  – tastatur/touch-inndata, bevegelse, zoom
+  entities/
+    Hero.js                          – spillerkarakter
+    HeroCrafting.js                  – crafting-state (elementer, metallurgi, kjemi, fysikk)
+    Monster.js                       – fiender med unike sprites per type
+    Pet.js                           – kjæledyr-følgesvenn (rev, katt, drage, ugle) med utstyr og ryggsekk
   scenes/
-    MenuScene.js
-    CharacterCreatorScene.js
-    GameScene.js             – orkestrator-scene (~230 linjer)
-    UIScene.js               – HUD overlay + ⚙-knapp
-    SkillScene.js            – nivå-opp evnevalg (velg 1 av 3)
-    InventoryScene.js        – inventory overlay (refresh-in-place)
-    SettingsScene.js         – lydinnstillinger (musikk/SFX volum + on/off)
-    GameOverScene.js
-simulator.html              – frittstående balansesimulator
+    MenuScene.js                     – hovedmeny
+    WelcomeScene.js                  – velkomst-popup (4 sider)
+    CharacterCreatorScene.js         – karakterskaper med 4 raser
+    GameScene.js                     – orkestrator-scene
+    UIScene.js                       – HUD overlay med minikart
+    SkillScene.js                    – ferdighetstre (6 stier)
+    InventoryScene.js                – inventar + kjæledyr-utstyr
+    MerchantScene.js                 – kjøpmann-overlay
+    SmelteryScene.js                 – smelteovn / leirplass (7 faner)
+    ChemLabScene.js                  – kjemisk laboratorium
+    AcceleratorScene.js              – partikkelakselerator (transuransk syntese)
+    ElementBookScene.js              – periodisk system / elementbok
+    MineralWikiScene.js              – browseable mineralkatalog
+    SettingsScene.js                 – lydinnstillinger
+    LeaderboardScene.js              – lokal + global ledertavle
+    GameOverScene.js                 – død/seier-skjerm
+backend/worker.js                    – Cloudflare Worker for global ledertavle
+simulator.html                       – frittstående balansesimulator
+tests/                               – nettleserbasert testsuite + CI-runner
 docs/GDD.md
 docs/CHANGELOG.md
+docs/Elements-mod.md                 – Elements-modifikasjon designdokument
 ```
 
 ---
