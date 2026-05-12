@@ -5,7 +5,15 @@
 ## v0.53 – 2026-05-07
 
 ### Tekniske endringer
+- **ItemSpawner-oppryddelse (#150):** Felles plasseringslogikk samlet i to private hjelpere: `_isTileFree(gx, gy)` (sjekker at ingen kiste eller gjenstand står på ruten) og `_placeRandomly(eligible, count, spawn)` (itererer kandidatlister og kaller spawn-callback ved ledige ruter til kvoten er nådd). Brukes nå av felle-plassering, brensel-spredning, mineral-spredning, garantert sjelden-mineral, gas pocket-brensel, kjæledyr-egg og kjøpmann-filter. ItemSpawner.js 638 → 625 linjer
+- **UIHelper-utvidelse (#147):** Lagt til `UIHelper.attachHover()` og `UIHelper.makeHoverButton()` for å samle den gjentatte `pointerover`/`pointerout`/`pointerdown`-mønsteret som var duplisert 50+ ganger på tvers av scener. SmelteryScene (12 sites) og InventoryScene (3 sites) er migrert som første demonstrasjon. Resterende scener migreres inkrementelt
+- **UITheme-modul (#148):** Ny `src/utils/UITheme.js` med navngitte konstanter for `UI_COLORS`, `UI_TEXT` og `UI_FONTS`. Eksisterende kode bruker fremdeles inline hex-verdier; modulen er klar for inkrementell adopsjon i senere PR-er
+- **TooltipManager (#151):** Ny `src/utils/TooltipManager.js` som eier én tooltip per scene, automatisk avbryter forrige tooltip ved ny `show()` og rydder opp på `scene.shutdown`. Fjerner risikoen for foreldreløse Phaser.Text-objekter etter rask hover eller scene-lukking. InventoryScene og SmelteryScene migrert
+- **Inventar-slot dedup (#146):** `InventoryScene._makeEquipSlot`/`_makeQuickUseSlot`/`_makeBackpackSlot`/`_makePetBackpackSlot` brukte tilnærmet identisk long-press- og pointer-håndtering. Felles helper `_attachSlotInteraction(bg, opts)` introdusert; ~80 linjer duplisering fjernet (InventoryScene 781 → 736 linjer)
 - **Karakterskaper-oppryddelse (#149):** `_rebuildAppearancePickers()` (146 linjer med tre nestede palett-løkker og fire knapperad-løkker) er splittet i to gjenbrukbare hjelpere: `_renderColorRow()` for prikk-paletter (hud/hår/øyne/farge) og `_renderToggleRow()` for tekstknapp-rader (kjønn/drakt/frisyre/skjegg). Funksjonsuttrykket er nå deklarativt: én linje per rad. CharacterCreatorScene 607 → 589 linjer
+- **SmelteryScene splittet (#145):** De syv `_drawXxxTab`-metodene er flyttet ut av scenen til `src/scenes/smeltery/SmelteryTabs.js` som separate renderer-klasser (`StashTabRenderer`, `SmeltTabRenderer`, `AlloyTabRenderer`, `ForgeTabRenderer`, `RefineTabRenderer`, `SemiTabRenderer`, `TechTabRenderer`). Hver eksponerer `static draw(scene)` og leser/skriver state på den passerte scenereferansen. Action-handlere (`_doSmelt`, `_doForge`, `_depositItem`, …) blir værende på scenen som transactional API. SmelteryScene 1502 → 677 linjer
+- **Fuel-energy dedup (#152):** `SmeltingSystem.calculateFuelEnergy` er allerede single source of truth; rendererne og scenen kaller den direkte. De tilsynelatende «dupliserte» kallene i smelt-batch-løkken er bevisst re-lesing etter hver iterasjon og bevares
+- Tester for `attachHover` og `TooltipManager` lagt til i `tests/`
 
 ---
 
