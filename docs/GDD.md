@@ -1,6 +1,6 @@
 # Labyrint Hero – Game Design Document
-**Versjon:** 0.54
-**Sist oppdatert:** 2026-05-14 (v0.54)
+**Versjon:** 0.55
+**Sist oppdatert:** 2026-05-21 (v0.55)
 
 ---
 
@@ -417,8 +417,9 @@ Aktiveres automatisk når helten har evner fra begge stier i et par. Noen synerg
 - Maks 50 innlegg, sortert etter verdener klarert → nivå → drap
 - Registrerer kun verdensklarering, ikke død
 
-### Global ledertavle (#64)
+### Global ledertavle (#64) – aktivert v0.55
 - Backend: Cloudflare Worker + KV-lagring (`backend/worker.js`)
+- Live på `https://labyrint-hero-leaderboard.gskomedal.workers.dev` (KV-namespace `LEADERBOARD`)
 - REST API: `POST /scores` for innsending, `GET /scores` for henting (topp 100)
 - Automatisk innsending ved verdensklarering (brann-og-glem, feiler stille)
 - Filtrering: rase og vanskelighetsgrad
@@ -539,7 +540,7 @@ Elements-modifikasjonen fletter det periodiske system, geologi, metallurgi og kj
 
 ### Nye datafiler
 - `src/data/elements.js` – 90 naturlige grunnstoffer (H–U, unntatt Tc og Pm) med symbol, atomnummer, kategori, tier (1-6), farge. 15 elementbonuser for gruppe/periode/kategori-fullføringer
-- `src/data/minerals.js` – ~36 malmer og ~9 krystaller med utbyttetabell (yields), energikostnad, smeltetid
+- `src/data/minerals.js` – ~63 malmer og ~9 krystaller med utbyttetabell (yields), energikostnad, smeltetid. Alle 90 naturlig forekommende grunnstoff (Z 1–92, unntatt Tc og Pm) har minst én potensiell kilde — enten direkte i en `yields`-tabell eller via `gas_pocket`-spesialrom (He, Ne, Ar, Kr, Xe)
 - `src/systems/ElementTracker.js` – Sporer oppdagelser og gruppeprestasjoner
 
 ### Mineraler i labyrinten

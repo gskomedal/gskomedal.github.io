@@ -4,11 +4,25 @@
 
 ## v0.55 – 2026-05-15
 
+### Tekniske endringer
+- **Global leaderboard aktivert:** Scores fra alle spillere lagres i Cloudflare KV og vises i Leaderboard-scenen sin Global-fane. Worker deployet til `https://labyrint-hero-leaderboard.gskomedal.workers.dev` med KV-namespace `LEADERBOARD`
+- **MIT-lisens lagt til:** Nytt `LICENSE`-fil i repo-root, `license`- og `author`-felt i `package.json`, og lisensseksjon i `README.md`. Prosjektet er nå offisielt åpen kildekode under MIT © 2026 Gunstein Skomedal
+
 ### Nye funksjoner
 - **Selg varer hos handelsmann (#183):** `MerchantScene` har nå Kjøp/Selg-faner. Selgepris er ca. 30% av kjøpsprisen (samme formel som `_itemPrice` så salgsverdien skalerer med tier, sjeldenhet og verden). Nøkkel og hakke kan ikke selges
 - **Synsfelt følger korridorene på Normal/Vanskelig (#185):** `MapRenderer.updateFog` bruker Bresenham-line-of-sight innenfor radius, så vegger blokkerer sikten. Lett vanskelighet beholder den klassiske sirkulære radiusen
 
 ### Balanse
+- **Alle naturlig forekommende grunnstoff har nå en mineralkilde:** Tidligere kunne 22 grunnstoff aldri oppdages fordi ingen mineral listet dem i `yields`. Lagt til 6 nye mineraler og utvidet 2 eksisterende:
+  - `bismuthinite` (Bi₂S₃, T4) – vismut
+  - `clausthalite` (PbSe, T4) – selen i blyselenid
+  - `lorandite` (TlAsS₂, T5) – thallium
+  - `gadolinite` ((Y,Ce)₂FeBe₂Si₂O₁₀, T5) – tunge sjeldne jordarter, spor av Tb og Ho
+  - `euxenite` ((Y,Ce,U)(Nb,Ta,Ti)₂O₆, T5) – spor av Eu, Tm, Lu
+  - `bekblende` (uren UO₂, T6) – uran + spor av hele aktinid-henfallskjeden (Ra, Rn, Po, Pa, Ac, At, Fr)
+  - `zircon` gir nå også spor av Hf (geokjemisk korrekt)
+  - `molybdenite` gir nå også spor av Re (IRL kommersielt biprodukt)
+  - He, Ne, Ar, Kr, Xe dekkes uendret av eksisterende `gas_pocket`-rom
 - **Nye mineraler for Cr/Mn/Ni/Sn og F (#175, #182):** Lagt til `pyrolusite` (Mn, T2), `fluorite` (F, T2), `stannite` (Sn+Cu, T3), `siegenite` (Ni+Co, T3). Lagt inn i `MINERAL_POOL[2]` og `[3]` så de dukker opp i tidlige verdener
 - **Tier 6 dominansen til Uraninitt/Thoritt brutt (#182):** Lagt til `rhodochrosite` (Mn, T6) og `awaruite_ore` (Ni-Fe, T6) i `MINERAL_POOL[6]`. Halverer effektivt U/Th-frekvensen på høyere verdener
 - **Pris-skalering mot gull-inflasjon (#184):** `_itemPrice` ganger nå med `1 + worldNum * 0.10` (mineraler `1 + worldNum * 0.08`). Effektiv pris-dobling rundt verden 10, tre-dobling rundt verden 20
